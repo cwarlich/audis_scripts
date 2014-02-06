@@ -1,0 +1,74 @@
+#!/bin/bash
+root=/home.ad/adaudis/label
+t=linux_tools
+a=/aud/aud_dev/$t
+#root=/tmp
+#a=$BUILD_TOOL_PATH
+set -ex
+tcAndFs() {
+    s=customize/`echo $1 | sed -e 's/_v4[27]//'`/custom_audis_${v}_0_
+    $ssh "$path/$s`echo $1 | sed -e 's/_v4[27]$\|v4[27]//'`.sh &&
+          cd $a/rootfs/build_$1 &&
+          tar -czf $d/rootfs/rootfs_${1}_0$v.$i.tar.gz rootfs &&
+          cd $d/rootfs && md5sum rootfs_${1}_0$v.$i.tar.gz >> $m &&
+          cd $d/toolchain &&
+          cp $a/$t/${t}_$1.tar ${t}_${1}_${arch}_host_0$v.$i.tar &&
+          md5sum ${t}_${1}_${arch}_host_0$v.$i.tar >> $m"
+}
+kernel() {
+    $ssh "mkdir -p $d/kernel/$1 &&
+          cp $a/rootfs/build_$1/rootfs/boot/$2 $d/kernel/$1/$2_audis_0$v.$i"
+}
+ct=cleartool
+# Looks like a bug in bash: First line should match!
+#if [[ `$ct catcs` =~ ^element\ \*\ AUDIS-V0([23])\.([0-9][0-9]) ]]; then
+if [[ `$ct catcs` =~ ^element.{3}AUDIS_FULL-V0([23])\.([0-9]{2}) ]]; then
+    v=${BASH_REMATCH[1]}; i=${BASH_REMATCH[2]}; arch=32bit
+    if [ "$v" == "2" ]; then
+        if [ -z "$1" ]; then host="ad282612pc"; else host="ad319910pc"; fi
+        build=`echo 001_doBegin 002_doGlibcRootfs 003_doBinutils 004_doGcc\
+               005_doUboot 007_doLinux 008_doGlibc 009_doOwnsrc 010_doBusybox\
+               011_doGdb 012_0_doDropbear 012_doTool |\
+               sed 's/\(\b[^ ]*\)\b/\1_Hudson /g'`
+        path=/storage/hd0b/audis_2_0/scripts
+        cust=("arm_v42 Image_x500 uImage_x500 zImage_x500 Image_cp1243
+                       uImage_cp1243 zImage_cp1243"
+              "ppc_v42 sc_w_old_uImage sc_w_old_vmlinux cp15431_uImage
+                       sc_w_vmlinux sc_w_zImage cp15431_vmlinux cp15431.dtb"
+              "mips_v42 cp1500_uImage"
+              "i686_v42 vmlinux_embedded_ctrl vmlinux_microbox vmlinux_tdcboard"
+              "mips_v42eb uImage_mips_eb")
+    else
+        host="ad045352pc"
+        build="001_Begin 002_doGlibcRootfs 003_doBinutils 004_doGcc 005_doUboot\
+               006_doLinuxKernel 007_doGlibc 008_doOwnsrc 009_doBusybox\
+               010_doGdb 011_doDropbear 012_doTools"
+        path=/storage/hd0b/audis_3_0/scripts
+        cust=("i686_v47 vmlinux_embedded_ctrl vmlinux_microbox"
+              "arm_v47 uImage_am335x")
+    fi
+    if [ $host == ad319910pc ]; then
+        path=/storage/hd1b/audis_2_0/scripts; arch=64bit
+    fi
+    d=$root/audis_v${v}_0/0$v.$i/$arch; m=MD5SUM_AuDis_v0$v.$i;
+    ssh="ssh -X $USER@$host.nbgm.siemens.de";
+    #rm -f /tmp/cd.log
+    #set -x
+    $ssh "sudo mkdir -p $a"
+    $ssh "sudo chmod 777 $a"
+    $ssh "sudo rm -rf $a/*"
+    for j in $build; do
+        #$ssh "AUDIS_TOOL_PATH=$a $ct setview `$ct pwv -s` <$path/$j" >>/tmp/cd.log 2>&1;
+        $ssh "AUDIS_TOOL_PATH=$a PATH=$a/bin:$PATH $ct setview `$ct pwv -s` <$path/$j";
+    done
+    $ssh "rm -rf $d"
+    $ssh "mkdir -p $d/rootfs $d/toolchain"
+    for((j=0; j < ${#cust[@]}; j++)); do
+        f=""; for k in ${cust[$j]}; do
+            if [ -z $f ]; then tcAndFs $k; f=$k; else kernel $f $k; fi
+        done
+    done
+    #{ set +x; } 2>/dev/null
+else
+    echo "This script must be called from a valid Customer \"Full\" View." >&2; exit -1;
+fi

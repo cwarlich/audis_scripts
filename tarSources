@@ -1,0 +1,26 @@
+#!/bin/bash
+cs=`cleartool catcs`
+if [[ $cs =~ ^element\ \*\ .*AUDIS_(.*)-V0([23])\.([0-9]{2})$ ]]; then
+    v=${BASH_REMATCH[2]}
+    f=AuDis_v0${v}_${BASH_REMATCH[3]}_${BASH_REMATCH[1]}
+    #root=/tmp
+    root=/home.ad/adaudis/label
+    d=$root/audis_v${v}_0/0${v}.${BASH_REMATCH[3]}/sources
+    mkdir -p $d
+    if [ "$v" == "2" ]; then supp="Gcc-4.2"; else supp="Gcc-4.7 u-boot"; fi
+    rm -f $d/MD5SUMS_$f
+    base=/audis_dev/src
+    for i in Binutils Linux Glibc Aud_Lib Gdb Busybox Documentation $supp; do
+        if [ "$i" == "AuD_Lib" -o $i == Documentation ]; then p=$base/ownsrc;
+        else p=$base/pkgs; fi
+        dir=`echo $i | tr '[:upper:]' '[:lower:]'`
+        cd $d
+        set -x
+        tar -C $p -czf $d/${i}_$f.tar.gz $dir
+        md5sum ${i}_$f.tar.gz >> MD5SUMS_$f
+        { set +x; } 2>/dev/null
+    done
+else
+    echo "This script must be called from a valid Customer View." >&2
+    exit -1
+fi

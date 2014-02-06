@@ -1,0 +1,51 @@
+#!/bin/bash
+set -e
+function doit() {
+    if ! cleartool desc -s lbtype:$lbl 1>/dev/null 2>&1; then
+        $1 cleartool mklbtype $lbl;
+    fi
+    $1 cleartool unlock lbtype:$lbl || true
+    $1 cleartool mklabel -rep $lbl /audis_dev /audis_dev/src
+    $1 cleartool mklabel -rec -rep $lbl /audis_dev/src/pkgs /audis_dev/src/ownsrc
+    $1 cleartool lock lbtype:$lbl
+}
+cd /audis_dev
+cs="cleartool catcs"
+t='^element \* \.\.\.\/linux_pkg_patch_audis'
+f="sed -ne"
+version=`$cs | $f 's/^element \* AUDIS_PATCH-\(V0[23]\.[0-9][0-9]\).*/\1/p'`
+if [ -z "$version" ]; then
+    echo "This script must be called from a valid Test View." >&2
+    exit -1
+fi
+branch=`$cs | $f "s/${t}3\?_full\/LATEST.*/FULL/p"`
+if [ -z "$branch" ]; then
+    branch=`$cs | $f "s/${t}3\?_preempt\/LATEST.*/NRK_PREEMPT_RT/p"`
+fi
+if [ -z "$branch" ]; then
+    if [ -z "`$cs | $f \"s/${t}.*/dummy/p\"`" ]; then
+        branch=ORG
+    else
+        branch=`$cs | $f "s/${t}3\?_rt\/LATEST.*/RT/p"`
+        if [ -z "$branch" ]; then
+            branch=ARCH
+        else
+            if [ -z "`$cs | $f \"s/${t}3\?_arch\/LATEST.*/dummy/p\"`" ]; then
+                branch=NRK
+            fi
+        fi
+    fi
+fi
+lbl=AUDIS_$branch-$version
+if [ "$1" != "now" -a -t 0 ]; then
+    echo -e "You are about to start the following rather lengthy actions:\n"
+    doit echo
+    echo -e "\nAre you sure that this is what you want to do?\n"
+    yOn=""
+    while [ "$yOn" != "y" -a "yOn" != "n" ]; do
+        read -p"Yes or no [y n]: " yOn;
+        if [ "$yOn" == "n" ]; then exit -1; fi
+    done
+fi
+set -x
+doit

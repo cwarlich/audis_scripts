@@ -1,0 +1,16 @@
+#!/bin/bash
+set -ex
+# Audis1
+ssh adaudisc@ad045352pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_1_0_014_Finish/workspace/audis_1_0/toolchain/linux_tools_arm.tar >/dev/null
+ssh adaudisc@ad045352pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_1_0_014_Finish/workspace/audis_1_0/toolchain/linux_tools_arm_eb.tar >/dev/null
+ssh adaudisc@ad045352pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_1_0_014_Finish/workspace/audis_1_0/toolchain/linux_tools_ertec.tar >/dev/null
+ssh adaudisc@ad045352pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_1_0_014_Finish/workspace/audis_1_0/toolchain/linux_tools_mips.tar >/dev/null
+# Audis2
+ssh adaudisc@ad282612pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_2_0_014_Finish/workspace/32bit_host/audis_2_0/toolchain/linux_tools_arm_v42.tar >/dev/null
+ssh adaudisc@ad282612pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_2_0_014_Finish/workspace/32bit_host/audis_2_0/toolchain/linux_tools_i686_v42.tar >/dev/null
+ssh adaudisc@ad282612pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_2_0_014_Finish/workspace/32bit_host/audis_2_0/toolchain/linux_tools_mips_v42.tar >/dev/null
+ssh adaudisc@ad282612pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_2_0_014_Finish/workspace/32bit_host/audis_2_0/toolchain/linux_tools_mips_v42eb.tar >/dev/null
+ssh adaudisc@ad282612pc tar -C $PWD -xf /storage/hd0b/hudson/jobs/audis_2_0_014_Finish/workspace/32bit_host/audis_2_0/toolchain/linux_tools_ppc_v42.tar >/dev/null
+# Audis3
+ssh adaudisc@ad045352pc tar -C $PWD -xf /storage/hd0b/jenkins/jobs/audis_3_0_015_Finish/workspace/32bit_host/audis_3_0/toolchain/linux_tools_arm_v47.tar >/dev/null
+ssh adaudisc@ad045352pc tar -C $PWD -xf /storage/hd0b/jenkins/jobs/audis_3_0_015_Finish/workspace/32bit_host/audis_3_0/toolchain/linux_tools_i686_v47.tar >/dev/null

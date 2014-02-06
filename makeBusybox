@@ -1,0 +1,143 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+isIn() { for i in $1; do if [ $i == "$2" ]; then return 0; fi; done; return 1;}
+
+function setx() {
+    set -x
+    $* 2>&1
+    { set +x; } 2>/dev/null
+}
+
+usage() {
+    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] [[arch] build-options]" 1>&2
+    echo "Options: -h:     Print this message." 1>&2
+    echo "         -c:     Delete all generated files." 1>&2
+    echo "         -o:     Use old style toolchains." 1>&2
+    echo "         -j jobs Do this many jobs in parallel." 1>&2
+    if [ -n "$ARCHS" ]; then
+        echo "List of available architectures:" 1>&2
+        echo "$ARCHS" 1>&2
+    fi
+    exit 1
+}
+
+second="Set\ view:\ ..\ NONE\ ..$"
+viewPath() {
+    if [[ `cleartool pwv` =~ $second ]]; then
+        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
+        view="${BASH_REMATCH[1]}";
+        if [[ $view =~ NONE ]]; then
+            echo "A view must be set to run this script." 1>&2
+            exit 1;
+        else
+            sed -ne "s%^[^ ]* \(.*$view\)%\1/%p" ~/.ccase_svreg
+        fi
+    else
+        echo /
+    fi
+}
+if [ -n "$(viewPath)" ]; then 
+    ARCHS="arm i686 mipsel mipseb powerpc"
+else
+    usage;
+fi
+
+old=false
+jobs=40
+clean=false
+while getopts ":hocj:" opt; do
+    case $opt in
+        h) usage ;;
+        c) clean=true ;;
+        j) jobs=$OPTARG ;;
+        o) old=true ;;
+        *) echo Error: Invalid option\(s\)!; usage ;;
+    esac
+done
+shift $((OPTIND-1))
+
+if [ $# == 1 ]; then
+    for i in $ARCHS; do
+        if [ "$i" == "$1" ]; then arch=$1; break; fi
+    done
+    if [ -z "$arch" ]; then usage; fi
+fi
+
+v=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
+if [ -n $v ]; then
+    VERSION="audis$v";
+else
+    usage
+fi
+
+interactive=false;
+if [ $# == 0 ]; then
+    cat <<!
+
+This is the AuDis 2 / 3 busybox build script. It is only that verbose
+if you call it without any command line parameters but works non-interactive if
+you pass it sufficient information on the command line, allowing its use in
+other non-interactive scripts.
+!
+    interactive=true;
+fi
+arch=$1
+while ! isIn "$ARCHS" $arch; do
+    echo -e "\nThe first parameter must be a valid toolchain."
+    if $interactive; then read -p"Available toolchains [$ARCHS]: " arch
+    else usage; fi
+done
+
+options=$2
+if $interactive; then
+    echo
+    read -p"Any additional options for the kernel build: " options
+fi
+
+GENERATED=`viewPath`audis_dev/src/generated
+destdir=$GENERATED/busybox/$arch/
+if $clean; then rm -rf $destdir; exit 0; fi
+
+TOOLCHAIN="$arch-audis$v-linux-gnueabi"
+if $old; then
+    if [ "$v" == "2" ]; then
+        TOOLCHAIN=$arch-v42;
+        if [ "$arch" == "mipsel" ]; then TOOLCHAIN=mips-v42; fi
+        if [ "$arch" == "mipseb" ]; then TOOLCHAIN=mips-v42eb; fi
+    else
+        TOOLCHAIN=$arch-v47;
+    fi
+fi
+
+if [ -z "$AUDIS_TOOL_PATH" ]; then
+    TOOL_PATH=$GENERATED/nsr/toolchain
+else
+    TOOL_PATH=$AUDIS_TOOL_PATH
+fi
+if [ -n "$TOOLCHAIN" ]; then
+    if $old || [ -n "$AUDIS_TOOL_PATH" ]; then
+        CROSS_COMPILE="$TOOL_PATH/bin/${TOOLCHAIN}-";
+    else
+        CROSS_COMPILE="$TOOL_PATH/$TOOLCHAIN/bin/${TOOLCHAIN}-";
+    fi
+else
+    CROSS_COMPILE="";
+fi
+echo Using toolchain ${CROSS_COMPILE}
+if [ -x ${CROSS_COMPILE}gdb ]; then
+    mkdir -p $destdir
+    echo @@@@@@@@@@@@@@@@@@@@@@@
+    echo @ Configuring busybox @
+    echo @@@@@@@@@@@@@@@@@@@@@@@
+    setx make -C `viewPath`/audis_dev/src/pkgs/busybox O=$destdir CROSS_COMPILE=$CROSS_COMPILE AuDis_defconfig
+    echo @@@@@@@@@@@@@@@@@@@@
+    echo @ Building busybox @
+    echo @@@@@@@@@@@@@@@@@@@@
+    setx make -j$jobs -C $destdir CROSS_COMPILE=$CROSS_COMPILE ARCH=$arch $options
+else
+    echo "The required toolchain seems to be missing or incomplete;"
+    echo "run \"makeToolchain $arch\""
+    echo "and / or fix or unset your AUDIS_TOOL_PATH first."
+fi

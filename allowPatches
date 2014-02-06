@@ -1,0 +1,11 @@
+#!/bin/bash
+cd /audis_dev
+cs="cleartool catcs"
+label=`$cs | sed -ne 's/^element \* \(AUDIS_PATCH-V0[23]\.[0-9][0-9]\).*/\1/p'`
+if [ -z $label ]; then
+    echo "This script must be called from a valid Test View." >&2
+    exit -1
+fi
+if [ "$1" == "yes" ]; then cleartool unlock lbtype:$label;
+elif [ "$1" == "no" ]; then cleartool lock lbtype:$label;
+else echo "Usage: $0 yes or $0 no."; fi

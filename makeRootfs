@@ -1,0 +1,243 @@
+#!/bin/bash
+set -e
+set -o pipefail
+isIn() { for i in $1; do if [ $i == "$2" ]; then return 0; fi; done; return 1;}
+second="Set\ view:\ ..\ NONE\ ..$"
+viewPath() {
+    if [[ `cleartool pwv` =~ $second ]]; then
+        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
+        view="${BASH_REMATCH[1]}";
+        if [[ $view =~ NONE ]]; then
+            echo "A view must be set to run this script." 1>&2
+            exit 1;
+        else
+            sed -ne "s%^[^ ]* \(.*$view\)%\1/%p" ~/.ccase_svreg
+        fi
+    else
+        echo /
+    fi
+}
+usage() {
+    echo "Usage: $0 [-h] toolchain board" 1>&2
+    echo "Options: -h:     Print this message." 1>&2
+    if isIn "$TOOLCHAINS" "$toolchain"; then
+    	echo "List of available boards for toolchain $toolchain:"
+        echo $(boards $arch)
+    fi
+    exit 1
+}
+
+while getopts ":h" opt; do
+    case $opt in
+        h) usage ;;
+        *) echo Error: Invalid option\(s\)!; usage ;;
+    esac
+done
+shift $((OPTIND-1))
+
+v=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
+if [ -n $v ]; then
+    VERSION="audis$v";
+else
+    usage
+fi
+
+if [ "$v" == "2" ]; then
+    TOOLCHAINS="arm i686 mipsel mipseb powerpc"
+else
+    TOOLCHAINS="arm i686"
+fi
+
+boards() {
+    find $(viewPath)audis_dev/src/pkgs/linux/arch/$1/configs -name "*_defconfig" -printf "%f "\
+    | sed -e 's/_defconfig//g' | sed -e 's/ $//'
+}
+
+interactive=false;
+if [ $# == 0 ]; then
+    cat <<!
+
+This is the universial AuDis 2 / 3 root filesystem build script. It is only that
+verbose if you call it without any command line parameters but works non-interactive
+if you pass it sufficient information on the command line, allowing its use in
+other non-interactive scripts.
+!
+    interactive=true;
+fi
+
+toolchain=$1
+while ! isIn "$TOOLCHAINS" $toolchain; do
+    echo -e "\nThe first parameter must be a valid toolchain."
+    if $interactive; then read -p"Available toolchains [$TOOLCHAINS]: " toolchain
+    else usage; fi
+done
+
+arch=$toolchain
+kImage=uImage
+case $toolchain in
+    mipsel | mipseb)
+        arch=mips
+        ;;
+    i686)
+        arch=x86
+        kImage=bzImage
+        ;;
+    *)
+        echo "Impossible to end up here!"
+        exit 1
+        ;;
+esac
+
+board=$2
+while ! isIn "$(boards $arch)" "$board"; do
+    echo -e "\nThe second parameter must be a valid board."
+    if $interactive; then read -p"Available Linux boards [$(boards $arch)]: " board
+    else usage; fi
+done
+
+rootfsDir=/storage/hd0b/target/$USER/$arch/$board
+kernel=/tftpboot/$USER/$arch/$board
+
+# Ensure that our destination directories are there.
+mkdir -p $rootfsDir `dirname $kernel`
+# We need to set world writable permissions because booting
+# the system will make everything to be owned by root.
+sudo chmod -R 777 $rootfsDir
+# Let's start with a clean state
+rm -rf $rootfsDir/* $kernel
+# Creating the directories that need initial content.
+mkdir $rootfsDir/etc $rootfsDir/sbin $rootfsDir/dev $rootfsDir/audislib
+# The inittab creates the rest as needed during system boot time.
+cat <<! >$rootfsDir/etc/inittab
+# This inittab bootstraps a fully operational busybox-based
+# root filesystem from just 3 files and a (symbolic) link.
+# - an inittab (this file :-)) stored in /etc doing both the
+#   bootstrapping magic (sysinit entries) _and_ the ordinary
+#   system startup
+# - the busybox executable itself, initially stored directly
+#   in the toplevel directory of the rootfs
+# - a link called init and linked to busybox, being needed
+#   because the boot loader cannot properly call the initial
+#   executable with a parameter, like e.g. /busybox init
+# - The third file is the console device file needed due to a
+#   bug?!; see below.
+
+# We need to create a directory for the system's executables
+# if they do not yet exist.
+::sysinit:busybox mkdir -p /bin
+# All the files being created during the bootstrap must only
+# live in tmpfs filesystems to ensure that they are properly
+# cleaned up on reboot. Furthermore, any additional executables
+# that may need persistent storage would belong into either
+# /usr/bin or /usr/sbin anyway.
+::sysinit:busybox mount -t tmpfs binfs /bin
+# We need the /proc filesystem so that busybox can be found
+# through the /proc/self/exe created below. Interestingly, we
+# need to do this _before_ installing the links: If we do it
+# afterwards, dropbear logs us out immediately after successful
+# authentication!
+::sysinit:busybox mkdir -p /proc
+::sysinit:busybox mount -t proc proc /proc
+# Now we are ready to create the applet links to busybox.
+# We put exerything under bin, which is quite appropriate for
+# a system that is typically used by the root user only.
+# Furthermore, this works arround a bug in the current busybox,
+# causing /usr/bin and /usr/sbin to be populated even when
+# busybox is configured with the CONFIG_INSTALL_NO_USR option.
+::sysinit:busybox --install -s /bin
+# We may now use the applets provided by busybox directly.
+# The next step is to prepare creation of device nodes.
+::sysinit:mkdir -p /dev
+::sysinit:mount -t tmpfs devfs /dev
+::sysinit:mkdir -p /dev/shm /dev/pts
+# We need the /sys filesystem for mdev to work properly.
+::sysinit:mkdir -p /sys
+::sysinit:mount -t sysfs sys /sys
+# Note that any modules should be loaded before that step to
+# ensure that their device nodes are created properly.
+::sysinit:mdev -s
+
+# The system would now be ready to start a shell, but there
+# is still some more work for a properly configured Linux
+# system.
+# We may want a temp directory.
+::wait:mkdir -p /tmp
+::wait:mount -t tmpfs tmpfs /tmp
+# Start an initial console. Note that this _requires_
+# /dev/console to exist _before_ the kernel passes control
+# to init, which looks like a kernel bug imho.
+::respawn:-sh
+
+# Stuff to do before rebooting
+::ctrlaltdel:reboot
+::shutdown:umount -a -r
+
+# Make file permissions as open as possible.
+::wait:find / -xdev -type f -type d -exec chown 0:0 {} \;
+::wait:find / -xdev -type f -type d -exec chmod +r {} \;
+::wait:find / -xdev -type f -type d -exec chmod +w {} \;
+
+# Dropbear (and probably others) like it this way.
+::wait:chmod 755 /
+::wait:mount -t devpts devpts /dev/pts
+::wait:mkdir -p /var/log
+
+# Continue with system startup.
+::wait:sh -c "if [ -e /etc/rc.local ]; then sh /etc/rc.local; fi"
+!
+# We copy the busybox ...
+cp -a `viewPath`audis_dev/src/generated/busybox/$toolchain/busybox $rootfsDir/sbin
+# ... and provide init ...
+(cd $rootfsDir/sbin && ln -s busybox init)
+# ... and the damned console device.
+sudo cp -a /dev/console $rootfsDir/dev
+# Finally, we copy the AuDis GLIBC.
+cp -a `viewPath`audis_dev/src/generated/nsr/toolchain/$toolchain-$VERSION-linux-gnueabi/$toolchain-$VERSION-linux-gnueabi/lib/*.so* $rootfsDir/audislib
+
+# Anything from this point on is optional as it is not required to boot the system.
+cat <<! >$rootfsDir/etc/rc.local
+#!/bin/sh
+# This is onlx needed due to a bug in our toolchain and will be fixed soon.
+mkdir -p /lib
+ln -s /audislib/ld-linux.so.2 /lib
+# We need a user database for any type of logins.
+if ! [ -e /etc/passwd ]; then
+    touch /etc/passwd /etc/group /etc/shadow
+    adduser -u0 -D -h/root root
+    # Set audis as password.
+    sed -i 's/^\(root:\)[^:]*\(:.*\)$/\1\$1\$OsaeziAT\$B0YvsH1ML6QikSz3t4lBJ1\2/' /etc/shadow
+    rm /etc/passwd- /etc/group- /etc/shadow-
+fi
+if [ -x /sbin/dropbear ]; then
+    mkdir -p /etc/dropbear /var/log;
+    touch /var/log/lastlog
+    for i in rsa dss; do
+        file=/etc/dropbear/dropbear_\${i}_host_key;
+        if ! [ -e \$file ]; then
+            dropbearkey -t \$i -f \$file >/dev/null;
+        fi;
+    done;
+    # Note that dropbear cannot completely be statically
+    # linked with glibc, as libnss* is only available as
+    # shared library.
+    dropbear;
+fi
+!
+# We copy dropbear ...
+cp -a `viewPath`audis_dev/src/generated/dropbear/$toolchain/dropbear $rootfsDir/sbin
+cp -a `viewPath`audis_dev/src/generated/dropbear/$toolchain/dropbearkey $rootfsDir/sbin
+# ... and the gdb server.
+cp -a `viewPath`audis_dev/src/generated/nsr/toolchain/$toolchain-$VERSION-linux-gnueabi/bin/$toolchain-$VERSION-linux-gnueabi-gdbserver $rootfsDir/sbin/gdbserver
+
+# Now we take care of the board specific
+# part, i.e. the kernel and its modules.
+cp -f `viewPath`audis_dev/src/generated/kernel/$arch/$board/arch/$arch/boot/$kImage $kernel
+make -C `viewPath`audis_dev/src/generated/kernel/$arch/$board INSTALL_MOD_PATH=$rootfsDir modules_install
+# Add additional module directories as desired.
+MODULEDIRS=test_driver
+for i in $MODULEDIRS; do
+    mkdir -p `viewPath`audis_dev/src/generated/modules/$arch/$board/$i
+    cp -a `viewPath`audis_dev/src/pkgs/linux/drivers/aud/$i/* `viewPath`audis_dev/src/generated/modules/$arch/$board/$i
+    make -C `viewPath`audis_dev/src/generated/kernel/$arch/$board M=`viewPath`audis_dev/src/generated/modules/$arch/$board/$i
+    make -C `viewPath`audis_dev/src/generated/kernel/$arch/$board M=`viewPath`audis_dev/src/generated/modules/$arch/$board/$i INSTALL_MOD_PATH=$rootfsDir modules_install
+done

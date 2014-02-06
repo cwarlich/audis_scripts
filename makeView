@@ -1,0 +1,235 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+isIn() { for i in $1; do if [ $i == "$2" ]; then return 0; fi; done; return 1;}
+usage() {
+    echo "Usage: $0 -h:   Prints this help message."
+    echo "       $0 [-s]: Enters interactive mode, verbosly asking for all the"
+    echo "                information that is required to create or modify a"
+    echo "                view."
+    echo "       $0 [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Preempt} {00-99}:"
+    echo "                Creates a customer view for the given increment."
+    echo "       $0 [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Preempt} {00-99} <time>:"
+    echo "                Creates or modifies a test view using the given time"
+    echo "                stamp."
+    echo "       $0 [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Preempt} [dev. branch] [00-99]:"
+    echo "                Creates a development view, optionally working on a"
+    echo "                development branch. While the view is based on .../LATEST"
+    echo "                by default, development views may pass in an increment"
+    echo "                that the view is to be based on." 
+    echo -e "\nThe option -s may be passed to create or modify a snapshot view"
+    echo "instead of a dynamic view."
+    exit 1;
+}
+viewType="Dyn"
+while getopts "hs" opt; do
+    case $opt in
+        h) usage ;;
+        s) viewType="Snap" ;;
+        *) echo Error: Invalid option\(s\)!; usage ;;
+    esac
+done
+shift $((OPTIND-1))
+interactive=false;
+if [ $# == 0 ]; then
+    cat <<!
+
+This is the universial AuDis 2 / 3 view creation script. It is only that verbose
+if you call it without any command line parameters but works non-interactive if
+you pass it sufficient information on the command line, allowing its use in
+other non-interactive scripts.
+
+The script may be used to create a new view for the current user or to update an
+existing view's config spec for the current user. It may be used for development
+views, test views and customer views alike, depending on the information being
+passed.
+!
+    interactive=true;
+fi
+audisVersions="2 3"
+V=$1
+while ! isIn "$audisVersions" $V; do
+    echo -e "\nThe first parameter must be a valid AuDis version."
+    if $interactive; then read -p"AuDis version [$audisVersions]: " V
+    else usage; fi
+done
+audisBranches="Full Rt Arch Org Nrk Nrk_Preempt"
+B=$2
+while ! isIn "$audisBranches" $B; do
+    echo -e "\nThe second parameter must be a valid audis branch."
+    if $interactive; then read -p"AuDis branch [$audisBranches]: " B
+    else usage; fi
+done
+p3=$3
+if $interactive; then
+    cat <<!
+
+The third parameter is crucial for the type of view being created or uptated:
+
+ * If it is a numeric value between 00 and 99, it is treated as an increment,
+   causing either a test view or a customer view to be created or updated.
+   Please refer to the description of the next parameter for more information.
+ * If the parameter is the empty string (or left out when being in
+   non-interactive mode), a development view to directly work on the selected
+   AuDis branch is created or updated. With the information passed so far, the
+   view's name will be $USER.Au${viewType}Dev${B}-0$V.
+ * Any other value creates or updates a development view to work on a user
+   branch. Please refer to the description of the next parameter for more
+   information.
+!
+    read -p"00-99 for increment or anything else for development view: " p3
+fi
+p4=$4
+if $interactive; then
+    p4="invalid"
+    if [[ $p3 =~ ^[0-9]{2}$ ]]; then
+        cat <<!
+
+The fourth parameter allows to select between a test view or a customer
+view:
+
+ * If the parameter is the empty string (or left out when being in
+   non-interactive mode), a customer view is created or modified. Its name will
+   be $USER.Au${viewType}Ext${B}-0$V.$p3.
+ * Anything else is interpreted as a ClearCase time stamp, causing the creation
+   or modification of a test view. The parameter will be passed unchanged (and
+   unchecked!) to the -time attribute of the config spec's rules. Valid times
+   are e.g.: 13-Dec-2014, 4-Jun-14.20:00, now, today, yesterday, Sat, Sun.
+   The view's name will be $USER.Au${viewType}Tst${B}-0$V.
+!
+        read -p"Enter a time spec or just hit return: " p4
+    elif [ -n "$p3" ]; then
+        cat <<!
+
+The fourth parameter allows to choose whether the development views's user branch
+is based on .../LATEST or on a specific increment:
+
+ * If the parameter is the empty string (or left out when being in 
+   non-interactive mode), the development view's  user branch is based on
+   ../LATEST, the view is called $USER.Au${viewType}Dev${B}-0${V}-$p3 and
+   the corresponding branch type is $USER.AuDis-0${V}-$p3.
+ * If the parameter is a valid increment number, the user branch is based
+   on that increment and the AuDis version of both the view's and the branch
+   type's name is extended by a dot and that increment number.
+!
+    fi
+fi
+if [ -n "$p3" ] && ! [[ $p3 =~ ^[0-9]{2}$ ]]; then
+    while [ -n "$p4" ] && ! [[ $p4 =~ ^[0-9]{2}$ ]]; do
+        echo -e "\nThe fourth parameter must either be the empty string or"
+        echo "a valid increment, i.e. within [00-99]:"
+        if $interactive; then read -p"00-99 for increment or the empty string: " p4
+        else usage; fi
+    done
+fi
+if [ -z "$p3" ]; then viewName=$USER.Au${viewType}Dev${B}-0$V;
+else
+    if [ -n "$p4" ]; then dotP4=".$p4"; else dotP4=""; fi
+    viewName=$USER.Au${viewType}Dev${B}-0${V}${dotP4}-$p3;
+fi
+v=linux_pkg_patch_audis; if [ "$V" == "2" ]; then v=${v}_; else v=$v${V}_; fi
+if [[ $p3 =~ ^[0-9]{2}$ ]]; then
+    if [ -z "$p4" ]; then viewName=$USER.Au${viewType}Ext${B}-0$V.$p3
+    else viewName=$USER.Au${viewType}Tst${B}-0$V; fi
+    a="-nocheckout -time $p4"
+    b="$a"
+elif [ -z "$p3" ]; then
+    a=""
+    b="-mkbranch $v`echo $B | tr '[:upper:]' '[:lower:]'`"
+else
+    a="-mkbranch $USER.AuDis-0${V}${dotP4}-$p3"
+    b="$a"
+fi
+CSPEC=`mktemp` # ClearCase is too thick to read config specs from stdin!
+e=element
+u=`echo $B | tr '[:lower:]' '[:upper:]'`
+if [[ $p3 =~ ^[0-9]{2}$ ]] && [ -z "$p4" ]; then
+    echo "$e * AUDIS_${u}-V0${V}.$p3" > $CSPEC;
+else
+    if [[ $p3 =~ ^[0-9]{2}$ ]]; then f="/^$e \* CHECKEDOUT$/d;"
+    else f="/^$e \* AUDIS_PATCH-V0${V}\.$p3 -nocheckout$/d;"; fi
+    if [ $B != Full ]; then f="$f /^$e \* \.\.\.\/${v}full\/LATEST $a$/d;"; fi
+    if [ $B == Nrk_Preempt ]; then f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $a$/d;";
+    else f="$f /^$e \* \.\.\.\/${v}nrk_preempt\/LATEST $a$/d;"; fi 
+    if [ $B == Arch ]; then f="$f /^$e \* \.\.\.\/${v}rt\/LATEST $a$/d;"; fi
+    if [ $B == Nrk ]; then f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $a$/d;"; fi
+    if [ $B == Org ]; then
+        f="$f /^$e \* \.\.\.\/${v}rt\/LATEST $a$/d;"
+        f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $a$/d;"
+        f="$f /^$e \* \.\.\.\/dev_rules_upstream_erl\/LATEST $b$/d;";
+    fi
+    if [[ $p3 =~ ^[0-9]{2}$ ]] || [ -z "$p3" ]; then 
+        f="$f /^$e \* \.\.\.\/$USER\.AuDis-0${V}${dotP4}-$p3\/LATEST $a$/d;"
+    fi
+    if [ "$V" == "2" ]; then
+        f="$f /^$e \/audis_dev\/src\/ownsrc\/aud_other\/audis_testsuite\/.*$/d;"
+    fi
+    f="$f s/\(^$e \* \.\.\.\/\(.*\)\/LATEST\) -mkbranch \2$/\1/"
+    sed -e "$f" <<! > $CSPEC;
+$e * CHECKEDOUT
+$e * AUDIS_PATCH-V0${V}.$p3 -nocheckout
+$e /audis_dev/src/ownsrc/aud_other/audis_testsuite/... .../linux_pkg_patch_audis_rt/LATEST $a
+$e * .../$USER.AuDis-0${V}${dotP4}-$p3/LATEST $a
+$e * .../${v}full/LATEST $a
+$e * .../${v}nrk_preempt/LATEST $a
+$e * .../${v}rt/LATEST $a
+$e * .../${v}arch/LATEST $a
+$e * AUDIS$V $b
+$e * .../dev_rules_upstream_erl/LATEST $b
+$e * /main/LATEST $b
+!
+    if [ -n "$p3" ] && ! [[ $p3 =~ ^[0-9]{2}$ ]] && [ -n "$p4" ]; then
+        sed -i "s/\.\.\.\/${v}\([a-z]*\)\/LATEST/AUDIS_\U\1-V0${V}.${p4}/" $CSPEC
+    fi
+fi
+if [ "$viewType" != "Dyn" ]; then echo "load /audis_dev" >> $CSPEC; fi
+if cleartool lsview $viewName 2>/dev/null; then cOm=modify; else cOm=create; fi
+if $interactive; then
+    echo -en "\nYou are about to $cOm view $viewName using the following config"
+    echo -e " spec:\n"
+    cat $CSPEC
+    if [ $cOm == modify ]; then
+        echo -e "\nThe following old config spec will be replaced:\n";
+        cleartool catcs -tag $viewName
+    fi
+    echo -e "\nAre you sure that this is what you want to do?\n"
+    yOn=""
+    while [ "$yOn" != "y" -a "yOn" != "n" ]; do
+        read -p"Yes or no [y n]: " yOn;
+        if [ "$yOn" == "n" ]; then exit -1; fi
+    done
+fi
+cd /audis_dev
+sim=""
+if [[ $p3 =~ ^[0-9]{2}$ ]]; then
+    if [ -n "$p4" ]; then
+        if ! cleartool desc -s lbtype:AUDIS_PATCH-V0${V}.$p3 2>/dev/null; then
+            $sim cleartool mklbtype -nc AUDIS_PATCH-V0${V}.$p3
+        fi
+    fi
+else
+    if [ -n "$p3" ] && ! \
+       cleartool lstype -kind brtype | grep $USER.AuDis-0${V}-$p3 >/dev/null 2>&1;
+    then
+        $sim cleartool mkbrtype -nc $USER.AuDis-0${V}${dotP4}-$p3
+    fi
+fi
+if [ $cOm == create ]; then
+    if [ "$viewType" == "Dyn" ]; then
+        $sim cleartool mkview -tag $viewName /storage/hd0b/viewstore/$viewName.vws
+    else
+        $sim mkdir -p /storage/hd0b/views
+        $sim chmod 777 /storage/hd0b/views
+        $sim ln -nfs /storage/hd0b/views ~/views
+        $sim cleartool mkview -sna -ptime -tag $viewName ~/views/$viewName
+        $sim cd ~/views/$viewName
+    fi
+else
+    if [ "$viewType" == "Dyn" ]; then
+        $sim cleartool startview $viewName
+    else
+        $sim cd ~/views/$viewName && cleartool update
+    fi
+fi
+$sim cleartool setcs -tag $viewName $CSPEC
