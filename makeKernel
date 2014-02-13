@@ -1,280 +1,40 @@
 #!/bin/bash
-set -e
-set -o pipefail
-
-# This function is really a hack, due to the fact that bash 3 doen't have
-# hash arrays. Please don't tell anyone that I did it. My excuse: It only
-# implements a nice to have feature and is by no means needed for the
-# script to function properly.
-supported() {
-    r=2;
-    a=true;
-    for i in $(sed -ne 's/^[\t ]*\([^(]*\))[\t ]*$/\1/p' $0 | sed -e 's/*/#/'); do
-        if [ "$i" == "#" ]; then
-            if $a; then r=3; else echo; fi
-            a=true;
-            continue;
-        fi
-        if [ -n "$r" ]; then
-            echo Supported AuDis $r kernels:
-            r=""
-        fi
-        if $a; then
-            a=false;
-            echo -n "for architecture $i:";
-        else
-            if [ "$i" != "|" ]; then echo -n " $i"; fi
-        fi
-    done
-}
-
-isIn() { for i in $1; do if [ $i == "$2" ]; then return 0; fi; done; return 1;}
-
-function setx() {
-    set -x
-    $* 2>&1
-    { set +x; } 2>/dev/null
-}
-
-boards() {
-    find $(viewPath)audis_dev/src/pkgs/linux/arch/$1/configs -name "*_defconfig" -printf "%f "\
-    | sed -e 's/_defconfig//g' | sed -e 's/ $//'
-}
+source `dirname $0`/audisLib
+AUDIS_OPTIONS="c o j:"
 
 usage() {
-    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] [[arch board] build-options]" 1>&2
-    echo "Options: -h:     Print this message." 1>&2
-    echo "         -c:     Delete all generated files." 1>&2
-    echo "         -o:     Use old style toolchains." 1>&2
-    echo "         -j jobs Do this many jobs in parallel." 1>&2
-    supported 1>&1
-    if [ -n "$ARCHS" ]; then
-        echo "List of available architectures:" 1>&2
-        echo "$ARCHS" 1>&2
-    fi
-    if isIn "$ARCHS" "$arch"; then
-    	echo "List of available boards for architecture $arch:"
-        echo $(boards $arch)
-    fi
-    exit 1
+    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] [toolchain board [build-parameter]]"
+    echo "Options: -c:     Delete all generated files."
+    echo "         -o:     Use old style toolchains."
+    echo "         -j jobs Do this many jobs in parallel."
 }
 
-second="Set\ view:\ ..\ NONE\ ..$"
-viewPath() {
-    if [[ `cleartool pwv` =~ $second ]]; then
-        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
-        view="${BASH_REMATCH[1]}";
-        if [[ $view =~ NONE ]]; then
-            echo "A view must be set to run this script." 1>&2
-            exit 1;
-        else
-            sed -ne "s%^[^ ]* \(.*$view\)%\1/%p" ~/.ccase_svreg
-        fi
-    else
-        echo /
-    fi
-}
-if [ -n "$(viewPath)" ]; then 
-    ARCHS=$(find $(viewPath)audis_dev/src/pkgs/linux/arch/* -maxdepth 0 -type d -printf "%f "  | sed -e 's/ $//')
-else
-    usage;
-fi
+audisBoard "$@"
+if ! $j; then j=40; fi
 
-old=false
-jobs=40
-clean=false
-while getopts ":hocj:" opt; do
-    case $opt in
-        h) usage ;;
-        c) clean=true ;;
-        j) jobs=$OPTARG ;;
-        o) old=true ;;
-        *) echo Error: Invalid option\(s\)!; usage ;;
-    esac
-done
-shift $((OPTIND-1))
-
-if [ $# == 1 ]; then
-    for i in $ARCHS; do
-        if [ "$i" == "$1" ]; then arch=$1; break; fi
-    done
-    usage;
-fi
-
-v=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
-if [ -n $v ]; then
-    VERSION="audis$v";
-else
-    usage
-fi
-
-interactive=false;
-if [ $# == 0 ]; then
-    cat <<!
-
-This is the universial AuDis 2 / 3 kernel build script. It is only that verbose
-if you call it without any command line parameters but works non-interactive if
-you pass it sufficient information on the command line, allowing its use in
-other non-interactive scripts.
-
-The script may be used to build an architecture-specific kernel, using a default
-configuration from $(viewPath)audis_dev/src/pkgs/linux/arch/<arch]/configs.
-!
-    interactive=true;
-fi
-arch=$1
-while ! isIn "$ARCHS" $arch; do
-    echo -e "\nThe first parameter must be a valid linux architecture."
-    echo -n "Supported Linux architectures: "
-    echo $(supported | sed -ne "/AuDis $v/,/AuDis/s/^for architecture \([^:]*\):.*$/ \1/p") 
-    if $interactive; then read -p"Available Linux architectures [$ARCHS]: " arch
-    else usage; fi
-done
-board=$2
-while ! isIn "$(boards $arch)" "$board"; do
-    echo -e "\nThe second parameter must be a valid board."
-    echo -n "Supported Linux boards: "
-    echo $(supported | sed -ne "/AuDis $v/,/AuDis/s/^for architecture $arch:\(.*\)$/ \1/p")
-    if $interactive; then read -p"Available Linux boards [$(boards $arch)]: " board
-    else usage; fi
-done
-options=$3
-if $interactive; then
+if $AUDIS_INTERACTIVE; then
     echo
-    read -p"Any additional options for the kernel build: " options
+    read -p"Any additional parameter for the kernel build: " AUDIS_PARAMETER3 1>&2
 fi
 
-GENERATED=`viewPath`audis_dev/src/generated
-destdir=$GENERATED/kernel/$arch/$board
-if $clean; then rm -rf $destdir; exit 0; fi
+GENERATED=$AUDIS_SOURCE_PATH/generated
+destdir=$GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD
 
-TOOLCHAIN=""
-ask=false
-if [ "$v" == "2" ]; then
-    case $arch in
-        arm)
-            if $old; then TOOLCHAIN=arm-v42; else TOOLCHAIN=arm-audis2-linux-gnueabi; fi
-            case $board in
-                imx6_audis | cp1243 | X500PROTOTYPE | db_98dx4122_spi_2_6_31_12)
-                    ;;
-                *)
-                    echo "Warning: No toolchain configured for this board," 1>&2
-                    echo "defaulting to AuDis 2 arm toolchain" 1>&2
-                    ask=true;
-                    ;;
-                esac
-            ;;
-        mips)
-            if $old; then TOOLCHAIN=mips-v42; else TOOLCHAIN=mipsel-audis2-linux-gnueabi; fi
-            case $board in
-                bcm53xx | cpeb)
-                    if $old; then TOOLCHAIN=mips-v42eb; else TOOLCHAIN=mipseb-audis2-linux-gnueabi; fi
-                    ;;
-                cp1500 | cp342_5 | cp443_5 | cp1626 | cp1626_uedd)
-                    ;;
-                *)
-                    echo "Warning: No toolchain configured for this board," 1>&2
-                    echo "defaulting to AuDis 2 mipsel toolchain" 1>&2
-                    ask=true;
-                    ;;
-                esac
-            ;;
-        powerpc)
-            if $old; then TOOLCHAIN=ppc-v42; else TOOLCHAIN=powerpc-audis2-linux-gnueabi; fi
-            case $board in
-                cp15431 | scalance_w_old | scalance_w)
-                    ;;
-                *)
-                    echo "Warning: No toolchain configured for this board," 1>&2
-                    echo "defaulting to AuDis 2 powerpc toolchain" 1>&2
-                    ask=true;
-                    ;;
-                esac
-            ;;
-        x86)
-            if $old; then TOOLCHAIN=i686-v42; else TOOLCHAIN=i686-audis2-linux-gnueabi; fi
-            case $board in
-                microbox | embedded_ctrl_hr | x686_secle_audis | tdcboard | tdcrack | audis_pc | sinumerik_d455 | nrk)
-                    ;;
-                *)
-                    echo "Warning: No toolchain configured for this board," 1>&2
-                    echo "defaulting to AuDis 2 i686 toolchain" 1>&2
-                    ask=true;
-                    ;;
-                esac
-            ;;
-        *)
-            echo "Warning: No toolchain configured for this architecture," 1>&2 
-            echo "defaulting to native host toolchain!" 1>&2 
-            ask=true;
-            ;;
-    esac
-else
-    case $arch in
-        arm)
-            if $old; then TOOLCHAIN=arm-v47; else TOOLCHAIN=arm-audis3-linux-gnueabi; fi
-            case $board in
-                am335x_evm | scalancem | imx6_audis | tatiana_audis)
-                    ;;
-                *)
-                    echo "Warning: No toolchain configured for this board," 1>&2
-                    echo "defaulting to AuDis 3 arm toolchain" 1>&2
-                    ask=true;
-                    ;;
-                esac
-            ;;
-        x86)
-            if $old; then TOOLCHAIN=i686-v47; else TOOLCHAIN=i686-audis3-linux-gnueabi; fi
-            case $board in
-                microbox | embedded_ctrl_hr)
-                    ;;
-                *)
-                    echo "Warning: No toolchain configured for this board," 1>&2
-                    echo "defaulting to AuDis 3 i686 toolchain" 1>&2
-                    ask=true;
-                    ;;
-                esac
-            ;;
-        *)
-            echo "Warning: No toolchain configured for this architecture," 1>&2 
-            echo "defaulting to native host toolchain!" 1>&2 
-            ask=true;
-            ;;
-    esac
-fi
-if [ -z "$AUDIS_TOOL_PATH" ]; then
-    TOOL_PATH=$GENERATED/nsr/toolchain
-else
-    TOOL_PATH=$AUDIS_TOOL_PATH
-fi
-if [ -n "$TOOLCHAIN" ]; then
-    if $old || [ -n "$AUDIS_TOOL_PATH" ]; then
-        CROSS_COMPILE="$TOOL_PATH/bin/${TOOLCHAIN}-";
-    else
-        CROSS_COMPILE="$TOOL_PATH/$TOOLCHAIN/bin/${TOOLCHAIN}-";
-    fi
-else
-    CROSS_COMPILE="";
-fi
-echo Using toolchain ${CROSS_COMPILE}
-if [ -x ${CROSS_COMPILE}gdb ]; then
-    while $ask && $interactive; do
-        echo You are about to build an unsupported kernel, are you sure? 
-        read -p"Yes or no [y n]: " yOn;
-        if [ "$yOn" == "n" ]; then exit -1; fi
-        if [ "$yOn" == "y" ]; then break; fi
-    done
+if $c; then setx rm -rf $destdir; exit 0; fi
+
+echo "Building with $AUDIS_TOOL_PREFIX"
+if [ -x ${AUDIS_TOOL_PREFIX}gdb ]; then
     mkdir -p $destdir
     echo @@@@@@@@@@@@@@@@@@@@@@
     echo @ Configuring kernel @
     echo @@@@@@@@@@@@@@@@@@@@@@
-    setx make -C `viewPath`/audis_dev/src/pkgs/linux O=$destdir CROSS_COMPILE=$CROSS_COMPILE ARCH=$arch ${board}_defconfig
+    setx make -C $AUDIS_SOURCE_PATH/pkgs/linux O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH ${AUDIS_BOARD}_defconfig
     echo @@@@@@@@@@@@@@@@@@@
     echo @ Building kernel @
     echo @@@@@@@@@@@@@@@@@@@
-    setx make -j$jobs -C $destdir CROSS_COMPILE=$CROSS_COMPILE ARCH=$arch $options
+    setx make -j$jobs -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 $AUDIS_KERNEL
 else
     echo "The required toolchain seems to be missing or incomplete;"
-    echo "run \"makeToolchain `echo $TOOLCHAIN | sed -e 's/^\([^-]*\).*/\1/'`\""
+    echo "run \"makeToolchain $AUDIS_TOOLCHAIN\""
     echo "and / or fix or unset your AUDIS_TOOL_PATH first."
 fi

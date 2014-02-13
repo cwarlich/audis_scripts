@@ -1,102 +1,26 @@
 #!/bin/bash
-set -e
-set -o pipefail
-isIn() { for i in $1; do if [ $i == "$2" ]; then return 0; fi; done; return 1;}
-second="Set\ view:\ ..\ NONE\ ..$"
-viewPath() {
-    if [[ `cleartool pwv` =~ $second ]]; then
-        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
-        view="${BASH_REMATCH[1]}";
-        if [[ $view =~ NONE ]]; then
-            echo "A view must be set to run this script." 1>&2
-            exit 1;
-        else
-            sed -ne "s%^[^ ]* \(.*$view\)%\1/%p" ~/.ccase_svreg
-        fi
-    else
-        echo /
-    fi
-}
+source `dirname $0`/audisLib
+AUDIS_OPTIONS="c o j:"
+
 usage() {
-    echo "Usage: $0 [-h] toolchain board" 1>&2
-    echo "Options: -h:     Print this message." 1>&2
-    if isIn "$TOOLCHAINS" "$toolchain"; then
-    	echo "List of available boards for toolchain $toolchain:"
-        echo $(boards $arch)
-    fi
-    exit 1
+    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] [toolchain board]"
+    echo "Options: -c:     Delete all generated files."
+    echo "         -o:     Use old style toolchains."
+    echo "         -j jobs Do this many jobs in parallel."
 }
+audisBoard "$@"
+if ! $j; then j=40; fi
 
-while getopts ":h" opt; do
-    case $opt in
-        h) usage ;;
-        *) echo Error: Invalid option\(s\)!; usage ;;
-    esac
-done
-shift $((OPTIND-1))
-
-v=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
-if [ -n $v ]; then
-    VERSION="audis$v";
-else
-    usage
+if $AUDIS_INTERACTIVE; then
+    echo
+    read -p"Any additional parameter for the rootfs build: " AUDIS_PARAMETER3 1>&2
 fi
 
-if [ "$v" == "2" ]; then
-    TOOLCHAINS="arm i686 mipsel mipseb powerpc"
-else
-    TOOLCHAINS="arm i686"
-fi
+GENERATED=$AUDIS_SOURCE_PATH/generated
+rootfsDir=/storage/hd0b/target/$USER/$AUDIS_ARCH/$AUDIS_BOARD
+kernel=/tftpboot/$USER/$AUDIS_ARCH/$AUDIS_BOARD
 
-boards() {
-    find $(viewPath)audis_dev/src/pkgs/linux/arch/$1/configs -name "*_defconfig" -printf "%f "\
-    | sed -e 's/_defconfig//g' | sed -e 's/ $//'
-}
-
-interactive=false;
-if [ $# == 0 ]; then
-    cat <<!
-
-This is the universial AuDis 2 / 3 root filesystem build script. It is only that
-verbose if you call it without any command line parameters but works non-interactive
-if you pass it sufficient information on the command line, allowing its use in
-other non-interactive scripts.
-!
-    interactive=true;
-fi
-
-toolchain=$1
-while ! isIn "$TOOLCHAINS" $toolchain; do
-    echo -e "\nThe first parameter must be a valid toolchain."
-    if $interactive; then read -p"Available toolchains [$TOOLCHAINS]: " toolchain
-    else usage; fi
-done
-
-arch=$toolchain
-kImage=uImage
-case $toolchain in
-    mipsel | mipseb)
-        arch=mips
-        ;;
-    i686)
-        arch=x86
-        kImage=bzImage
-        ;;
-    *)
-        echo "Impossible to end up here!"
-        exit 1
-        ;;
-esac
-
-board=$2
-while ! isIn "$(boards $arch)" "$board"; do
-    echo -e "\nThe second parameter must be a valid board."
-    if $interactive; then read -p"Available Linux boards [$(boards $arch)]: " board
-    else usage; fi
-done
-
-rootfsDir=/storage/hd0b/target/$USER/$arch/$board
-kernel=/tftpboot/$USER/$arch/$board
+if $c; then setx rm -rf $rootfsdir $kernel; exit 0; fi
 
 # Ensure that our destination directories are there.
 mkdir -p $rootfsDir `dirname $kernel`
@@ -186,13 +110,13 @@ cat <<! >$rootfsDir/etc/inittab
 ::wait:sh -c "if [ -e /etc/rc.local ]; then sh /etc/rc.local; fi"
 !
 # We copy the busybox ...
-cp -a `viewPath`audis_dev/src/generated/busybox/$toolchain/busybox $rootfsDir/sbin
+cp -a $GENERATED/busybox/$AUDIS_TOOLCHAIN/busybox $rootfsDir/sbin
 # ... and provide init ...
 (cd $rootfsDir/sbin && ln -s busybox init)
 # ... and the damned console device.
 sudo cp -a /dev/console $rootfsDir/dev
 # Finally, we copy the AuDis GLIBC.
-cp -a `viewPath`audis_dev/src/generated/nsr/toolchain/$toolchain-$VERSION-linux-gnueabi/$toolchain-$VERSION-linux-gnueabi/lib/*.so* $rootfsDir/audislib
+cp -a $GENERATED/nsr/toolchain/$AUDIS_TARGET/$AUDIS_TARGET/lib/*.so* $rootfsDir/audislib
 
 # Anything from this point on is optional as it is not required to boot the system.
 cat <<! >$rootfsDir/etc/rc.local
@@ -224,20 +148,21 @@ if [ -x /sbin/dropbear ]; then
 fi
 !
 # We copy dropbear ...
-cp -a `viewPath`audis_dev/src/generated/dropbear/$toolchain/dropbear $rootfsDir/sbin
-cp -a `viewPath`audis_dev/src/generated/dropbear/$toolchain/dropbearkey $rootfsDir/sbin
+cp -a $GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbear $rootfsDir/sbin
+cp -a $GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbearkey $rootfsDir/sbin
 # ... and the gdb server.
-cp -a `viewPath`audis_dev/src/generated/nsr/toolchain/$toolchain-$VERSION-linux-gnueabi/bin/$toolchain-$VERSION-linux-gnueabi-gdbserver $rootfsDir/sbin/gdbserver
+cp -a $GENERATED/nsr/toolchain/$AUDIS_TARGET/bin/$AUDIS_TARGET-gdbserver $rootfsDir/sbin/gdbserver
 
 # Now we take care of the board specific
 # part, i.e. the kernel and its modules.
-cp -f `viewPath`audis_dev/src/generated/kernel/$arch/$board/arch/$arch/boot/$kImage $kernel
-make -C `viewPath`audis_dev/src/generated/kernel/$arch/$board INSTALL_MOD_PATH=$rootfsDir modules_install
+cp -f $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$AUDIS_KERNEL $kernel
+make -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD INSTALL_MOD_PATH=$rootfsDir modules_install
 # Add additional module directories as desired.
+echo "Building with $AUDIS_TOOL_PREFIX"
 MODULEDIRS=test_driver
 for i in $MODULEDIRS; do
-    mkdir -p `viewPath`audis_dev/src/generated/modules/$arch/$board/$i
-    cp -a `viewPath`audis_dev/src/pkgs/linux/drivers/aud/$i/* `viewPath`audis_dev/src/generated/modules/$arch/$board/$i
-    make -C `viewPath`audis_dev/src/generated/kernel/$arch/$board M=`viewPath`audis_dev/src/generated/modules/$arch/$board/$i
-    make -C `viewPath`audis_dev/src/generated/kernel/$arch/$board M=`viewPath`audis_dev/src/generated/modules/$arch/$board/$i INSTALL_MOD_PATH=$rootfsDir modules_install
+    mkdir -p $GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i
+    cp -f $AUDIS_SOURCE_PATH/pkgs/linux/drivers/aud/$i/* $GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i
+    make -j$j -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER3
+    make -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX INSTALL_MOD_PATH=$rootfsDir modules_install
 done

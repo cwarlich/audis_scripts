@@ -1,107 +1,42 @@
 #!/bin/bash
-set -e
-set -o pipefail
+source `dirname $0`/audisLib
+AUDIS_OPTIONS="s c r i j: n:"
 
 function usage() {
-    echo "Usage: $0 [-hscri] [-j jobs] [-n step] arch" 1>&2
-    echo "Options: -h:     Print this message." 1>&2
-    echo "         -s:     Just simulate, i.e. only prints what would be done." 1>&2
-    echo "         -c:     Delete all generated files." 1>&2
-    echo "         -r:     Create a toolchain with sysroot." 1>&2
-    echo "         -i:     Install toolchain in $AUDIS_TOOL_PATH." 1>&2
-    echo "         -j jobs Do this many jobs in parallel." 1>&2
-    echo "         -n step Restart the build with that step." 1>&2
-    echo "List of currently supported architectures:" 1>&2
-    echo "powerpc arm mipsel mipseb i686 for AuDis 2" 1>&2
-    echo "arm i686 for AuDis 3" 1>&2
-    echo "The script must be called from within a valid AuDis view." 1>&2
-    exit 1
+    echo "Usage: $0 [-hscri] [-j jobs] [-n step] arch"
+    echo "Options: -s:     Just simulate, i.e. only prints what would be done."
+    echo "         -c:     Delete all generated files."
+    echo "         -r:     Create a toolchain with sysroot."
+    echo "         -i:     Install toolchain in $AUDIS_TOOL_PATH."
+    echo "         -j jobs Do this many jobs in parallel."
+    echo "         -n step Restart the build with that step."
 }
 
-second="Set\ view:\ ..\ NONE\ ..$"
-viewPath() {
-    if [[ `cleartool pwv` =~ $second ]]; then
-        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
-        view="${BASH_REMATCH[1]}";
-        if [[ $view =~ NONE ]]; then
-            echo "A view must be set to run this script." 1>&2
-            usage;
-        else
-            sed -ne "s%^[^ ]* \(.*$view\)%\1/%p" ~/.ccase_svreg
+audisTarget "$@" # We don't want audisToolPath here, as we need full control where to install.
+if ! $j; then j=40; fi
+
+if [ "$n" != "false" ]; then
+    if [ "$n" -eq "$n" ] 2>/dev/null; then # Test if number.
+        if [ "$n" -lt "1" ]; then
+            echo "The argument to option -n must be a positive integer." 1>&2
+            usageWrapper;
         fi
-    else
-        echo /
+    else 
+        echo "The argument to option -n must be a number." 1>&2
+        usageWrapper;
     fi
-}
-isIn() { for i in $1; do if [ $i == "$2" ]; then return 0; fi; done; return 1;}
-
-SR=nsr
-clean=
-sim=
-inst=false;
-while getopts ":hscrij:n:" opt; do
-    case $opt in
-        h) usage ;;
-        s) sim=echo ;;
-        c) clean=true ;;
-        r) SR=sr ;;
-        i) inst=true ;;
-        n) STEP=$OPTARG ;;
-        j) JOBS=$OPTARG ;;
-        :) echo Error: Option n or j requires an argument! 1>&2; usage ;;
-        *) echo Error: Invalid option\(s\)! 1>&2; usage ;;
-    esac
-done
-shift $((OPTIND-1))
-
-if [ -n "$STEP" ]; then
-    if [ "$STEP" -eq "$STEP" ] 2>/dev/null; then
-        if [ "$STEP" -lt "1" ]; then usage; fi
-    else usage; fi
-fi
-
-ARCH=$1
-v=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
-if [ -n $v ]; then
-    VERSION="audis$v";
-else
-    usage
 fi
 
 host=i386-linux;
 
-interactive=false;
-if [ $# == 0 ]; then
-    cat <<!
-
-This is the universial AuDis 2 / 3 toolchain build script. It is only that verbose
-if you call it without any command line parameters but works non-interactive if
-you pass it sufficient information on the command line, allowing its use in
-other non-interactive scripts.
-
-The script may be used to build an architecture-specific cross toolchain.
-!
-    interactive=true;
-fi
-if [ "$v" == "2" ]; then
-    ARCHS="arm i686 mipsel mipseb powerpc"
-else
-    ARCHS="arm i686"
-fi
-while ! isIn "$ARCHS" $ARCH; do
-    echo -e "\nThe first parameter must be a valid architecture."
-    if $interactive; then read -p"Available architectures [$ARCHS]: " ARCH
-    else usage; fi
-done
-
 GCCCONFIG=""
 BINUTILSCONFIG=""
 GCCMAKE="CFLAGS_FOR_TARGET=-static"
-if [ "$v" == "2" ]; then
+if [ "$AUDIS_VERSION" == "2" ]; then
     GCC=gcc-4.2
     LIMITSDIR=include
-    case $ARCH in
-        mipsel* | mipsle*)
+    case $AUDIS_TOOLCHAIN in
+        mipsel)
             GCCCONFIG="--disable-libmudflap --disable-libssp"
             GCCMAKE="FLAGS_FOR_TARGET=-EL CFLAGS_FOR_TARGET=-EL CFLAGS_FOR_TARGET+=-static CXXFLAGS_FOR_TARGET=-EL LDFLAGS_FOR_TARGET=-Wl,-EL LIBCFLAGS_FOR_TARGET=-EL LIBCXXFLAGS_FOR_TARGET=-EL"
             CHEATFILE=mips_v42el_basetool.tar
@@ -112,7 +47,7 @@ if [ "$v" == "2" ]; then
             AUDENV=MIPS_V42
             AUDTARGET=audis_mips_v42
             ;;
-        mips* | mipsbe* | mipseb*)
+        mipseb)
             GCCCONFIG="--disable-libmudflap --disable-libssp"
             CHEATFILE=mips_v42eb_basetool.tar
             CHEATDIR=mips-v42eb-linux
@@ -122,7 +57,7 @@ if [ "$v" == "2" ]; then
             AUDENV=MIPS_V42EB
             AUDTARGET=audis_mips_v42eb
             ;;
-        arm*)
+        arm)
             GCCCONFIG="--disable-libmudflap --disable-libssp"
             GCCMAKE=""
             CHEATFILE=arm_v42_basetool.tar
@@ -133,7 +68,7 @@ if [ "$v" == "2" ]; then
             AUDENV=ARM_V42
             AUDTARGET=audis_arm_v42
             ;;
-        ppc* | powerpc*)
+        powerpc)
             GCCCONFIG="--disable-libmudflap --disable-libssp"
             CHEATFILE=ppc_v42_basetool.tar
             CHEATDIR=powerpc-v42-linux-gnueabi
@@ -143,7 +78,7 @@ if [ "$v" == "2" ]; then
             AUDENV=PPC_V42
             AUDTARGET=audis_ppc_v42
             ;;
-        *86*)
+        i686)
             CHEATFILE=x686_v42_basetool.tar
             CHEATDIR=i686-v42-linux
             LINUXARCH=x86
@@ -154,14 +89,14 @@ if [ "$v" == "2" ]; then
             ;;
         *)
             echo "Error: Unknown architecture!" 1>&2 
-            usage
+            usagWWrapper
             ;;
     esac
 else
     GCC=gcc-4
     LIMITSDIR=include-fixed
-    case $ARCH in
-        arm*)
+    case $AUDIS_TOOLCHAIN in
+        arm)
             CHEATFILE=arm_v47_basetool.tar
             CHEATDIR=arm-v47-linux-gnueabi
             LINUXARCH=arm
@@ -173,7 +108,7 @@ else
             BINUTILSCONFIG="--with-arch=armv7-a"
             GCCMAKE="AUTOCONF=no CFLAGS_FOR_TARGET=-static CFLAGS_FOR_TARGET+=-fPIC"
             ;;
-        *86*)
+        i686)
             CHEATFILE=x686_v47_basetool.tar
             CHEATDIR=i686-v47-linux
             LINUXARCH=x86
@@ -184,55 +119,51 @@ else
             GCCMAKE="CFLAGS=-D__EXPORTED_HEADERS CFLAGS_FOR_TARGET=-static"
             ;;
         *)
-            echo "Error: Unknown architecture!" 1>&2 
-            usage
+            echo "Unknown architecture!" 1>&2 
+            usageWWrapper
             ;;
     esac
 fi
 
-TARGET=${ARCH}-${VERSION}-linux-gnueabi
-SOURCES=`viewPath`audis_dev/src/pkgs
-ROOTDIR=`viewPath`audis_dev/src/generated/$SR
+SOURCES=$AUDIS_SOURCE_PATH/pkgs
 TRUSTED=/audislib
 
-#ARCHIVES=$ROOT/archives/$VERSION
-PREFIX=$ROOTDIR/toolchain/$TARGET
-OBJECTS=$ROOTDIR/objects/$TARGET
-mkdir -p $OBJECTS
-log=$OBJECTS/build.log
-if [ -z "$clean" -a -z "$sim" ]; then
-    exec 4>&1
-    trap "sleep 1 && echo A logfile has been written to $log >&4; exit 1" EXIT
-fi
-if [ "$SR" == "sr" ]; then
-    SYSROOT=$PREFIX/$TARGET/sysroot
+if $r; then
+    ROOTDIR=$AUDIS_SOURCE_PATH/generated/sr
+    PREFIX=$ROOTDIR/toolchain/$AUDIS_TARGET
+    OBJECTS=$ROOTDIR/objects/$AUDIS_TARGET
+    #ARCHIVES=$ROOT/archives/$VERSION
+    SYSROOT=$PREFIX/$AUDIS_TARGET/sysroot
     SYSROOTUSR=$SYSROOT/usr
     WITHSYSROOT=--with-sysroot=$SYSROOT
 else
+    ROOTDIR=$AUDIS_SOURCE_PATH/generated/nsr
+    PREFIX=$ROOTDIR/toolchain/$AUDIS_TARGET
+    OBJECTS=$ROOTDIR/objects/$AUDIS_TARGET
+    #ARCHIVES=$ROOT/archives/$VERSION
     SYSROOT=$PREFIX
-    SYSROOTUSR=$SYSROOT/$TARGET
+    SYSROOTUSR=$SYSROOT/$AUDIS_TARGET
     WITHSYSROOT=
 fi
+mkdir -p $OBJECTS
+log=$OBJECTS/build.log
 PATH=$PREFIX/bin:$PATH
-if [ -z "$JOBS" ]; then JOBS=40; fi
-
-function setx() {
-    set -x
-    $* 2>&1
-    { set +x; } 2>/dev/null
-}
+if ! $c && ! $s; then
+    exec 4>&1
+    trap "sleep 1 && echo A logfile has been written to $log >&4; exit 1" EXIT
+fi
 
 function timed() {
     setx time -p $*
 }
 
 if [ -n "$ARCHIVES" ]; then
-    for i in $ARCHIVES/*.tar.*; do
-        if [ -d $SOURCES/`tar -tf $i | grep "^[^/]*/$"` ]; then
-            setx echo $i has already been unpacked.;
+    for index in $ARCHIVES/*.tar.*; do
+        if [ -d $SOURCES/`tar -tf $index | grep "^[^/]*/$"` ]; then
+            setx echo $index has already been unpacked.;
         else
             mkdir -p $SOURCES
-            timed tar -xf $i -C $SOURCES;
+            timed tar -xf $index -C $SOURCES;
         fi
     done
 fi
@@ -242,19 +173,19 @@ if [ ! -f $LASTDONEFILE ]; then
     echo 0 >$LASTDONEFILE
 fi
 LASTDONE=`cat $LASTDONEFILE`;
-if [ "$STEP" -le "$LASTDONE" ] 2>/dev/null; then 
+if [ "$n" -le "$LASTDONE" ] 2>/dev/null; then 
     # bash bug: believe it or not, but this version of bash just exits
     # when something is assigned to a variable that _evaluates_ to 0.
     # Thus, while the line below is logically equivalent to:
-    # LASTDONE=`expr $STEP - 1`;
-    # we need to handle the case when $STEP is 1 differently!
-    if [ "$STEP" -eq "1" ]; then LASTDONE=0; else LASTDONE=`expr $STEP - 1`; fi
+    # LASTDONE=`expr $n - 1`;
+    # we need to handle the case when $n is 1 in a different way!
+    if [ "$n" -eq "1" ]; then LASTDONE=0; else LASTDONE=`expr $n - 1`; fi
 fi
 echo $LASTDONE >$LASTDONEFILE
 DOCURRENT=0
 function cond() {
     ((DOCURRENT++))
-    if [ -n "$sim" ]; then
+    if $s; then
         setx echo Step $DOCURRENT:
         timed echo $*
     else
@@ -269,7 +200,9 @@ function cond() {
 
 
 function doit() {
-    if [ -n "$clean" ]; then
+    local sim;
+    if $s; then sim=echo; fi
+    if $c; then
         setx $sim rm -rf $OBJECTS
         setx $sim rm -rf $PREFIX
         exit 0;
@@ -291,18 +224,18 @@ function doit() {
     setx echo @@@@@@@@@@@@
     mkdir -p $OBJECTS/binutils
     setx cd $OBJECTS/binutils
-    cond $SOURCES/binutils/configure --target=$TARGET --prefix=$PREFIX $BINUTILSCONFIG $WITHSYSROOT
-    cond make -j$JOBS
-    cond make -j$JOBS install
+    cond $SOURCES/binutils/configure --target=$AUDIS_TARGET --prefix=$PREFIX $BINUTILSCONFIG $WITHSYSROOT
+    cond make -j$j
+    cond make -j$j install
 
     setx echo @@@@@@@
     setx echo @ GCC @
     setx echo @@@@@@@
     mkdir -p $OBJECTS/$GCC
     setx cd $OBJECTS/$GCC
-    cond $SOURCES/$GCC/configure --target=$TARGET --prefix=$PREFIX --enable-languages=c,c++ --disable-libgomp $GCCCONFIG $WITHSYSROOT
-    cond make -j$JOBS $GCCMAKE
-    cond make -j$JOBS $GCCMAKE install
+    cond $SOURCES/$GCC/configure --target=$AUDIS_TARGET --prefix=$PREFIX --enable-languages=c,c++ --disable-libgomp $GCCCONFIG $WITHSYSROOT
+    cond make -j$j $GCCMAKE
+    cond make -j$j $GCCMAKE install
 
     setx echo @@@@@@@@@@@@@@@@@
     setx echo @ LINUX HEADERS @
@@ -316,16 +249,16 @@ function doit() {
     setx echo @@@@@@@@@
     setx cd $OBJECTS/glibc
     cond cp -f $SOURCES/glibc/$GLIBCCONFIGPARAMS $OBJECTS/glibc/configparms
-    cond $SOURCES/glibc/configure --prefix=$PREFIX/$TARGET --host=$TARGET --build=i686-pc-linux --with-headers=$SYSROOTUSR/include --disable-sanity-checks --with-tls libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes $GLIBCCONFIG 
+    cond $SOURCES/glibc/configure --prefix=$PREFIX/$AUDIS_TARGET --host=$AUDIS_TARGET --build=i686-pc-linux --with-headers=$SYSROOTUSR/include --disable-sanity-checks --with-tls libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes $GLIBCCONFIG 
     cond cp -f $SOURCES/linux/include/linux/compiler.h $SYSROOTUSR/include/linux
     cond cp -f $SOURCES/glibc/rt/rt/internal.h $SYSROOTUSR/include/rt
-    cond make -j$JOBS AUTOCONF=no user-defined-trusted-dirs=$TRUSTED
+    cond make -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED
 
     setx echo @@@@@@@@@@@@@@@@@
     setx echo @ CLEAN INSTALL @
     setx echo @@@@@@@@@@@@@@@@@
     cond rm -rf $PREFIX
-    if [ "$v" == "3" -a "$ARCH" == arm ]; then
+    if [ "$AUDIS_VERSION" == "3" -a "$AUDIS_TOOLCHAIN" == arm ]; then
         # Looks like we still need to cheat for the AuDis 3 ARM
         # build, but we are quite clean for everything else :-).
         setx echo @@@@@@@@@@@@@@@@@
@@ -338,7 +271,7 @@ function doit() {
     setx echo @ BINUTILS INSTALL @
     setx echo @@@@@@@@@@@@@@@@@@@@
     setx cd $OBJECTS/binutils
-    cond make -j$JOBS install
+    cond make -j$j install
     setx echo @@@@@@@@@@@@@@@@@@@@@@@@@
     setx echo @ LINUX HEADERS INSTALL @
     setx echo @@@@@@@@@@@@@@@@@@@@@@@@@
@@ -351,9 +284,9 @@ function doit() {
     setx cd $OBJECTS/glibc
     # This is how we did it before ...
     #cond tar xf $SOURCES/glibc/baseLibsAud/$CHEATFILE
-    #cond cp -rf $CHEATDIR/* $PREFIX/$TARGET
+    #cond cp -rf $CHEATDIR/* $PREFIX/$AUDIS_TARGET
     # ... and this is our clean approach as we do it now ...
-    cond make -j$JOBS AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install_root=$SYSROOTUSR prefix="" install-headers
+    cond make -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install_root=$SYSROOTUSR prefix="" install-headers
     cond cp -f $SOURCES/glibc/include/gnu/stubs.h $SYSROOTUSR/include/gnu
     cond cp -f $OBJECTS/glibc/bits/stdio_lim.h $SYSROOTUSR/include/bits
     cond cp -f $SOURCES/linux/include/linux/compiler.h $SYSROOTUSR/include/linux
@@ -372,24 +305,24 @@ function doit() {
     # cat gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h >gcc/$LIMITSDIR/limits.h
     # but without redirection, which can't be passed to a function, i.e. cond.
     cond sed -ne "wgcc/$LIMITSDIR/limits.h" gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h
-    cond make -j$JOBS $GCCMAKE install
+    cond make -j$j $GCCMAKE install
     setx echo @@@@@@@@@@@@@@@@@
     setx echo @ GLIBC INSTALL @
     setx echo @@@@@@@@@@@@@@@@@
     setx cd $OBJECTS/glibc
-    if [ "$ARCH" == "powerpc" ]; then
-        cond cp -f $OBJECTS/glibc/$CHEATDIR/include/sys/io.h $PREFIX/$TARGET/include/sys
+    if [ "$AUDIS_TOOLCHAIN" == "powerpc" ]; then
+        cond cp -f $OBJECTS/glibc/$CHEATDIR/include/sys/io.h $PREFIX/$AUDIS_TARGET/include/sys
     fi
-    cond make -j$JOBS AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install
-    cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$TARGET/lib
-    cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$TARGET/lib/libthread_db.a
+    cond make -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install
+    cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib
+    cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib/libthread_db.a
     # FIXME: No output.
     if [ "$SR" == "nsr" ]; then
         # This is how we did it before, misleading and messing up arm ...
-        #sed -i -e '/GROUP/ c\GROUP ( libc.so.6 libc_nonshared.a  AS_NEEDED ( ld-linux.so.2 ) )' $PREFIX/$TARGET/lib/libc.so
-        #sed -i -e '/GROUP/ c\GROUP ( libpthread.so.0 libpthread_nonshared.a )' $PREFIX/$TARGET/lib/libpthread.so
+        #sed -i -e '/GROUP/ c\GROUP ( libc.so.6 libc_nonshared.a  AS_NEEDED ( ld-linux.so.2 ) )' $PREFIX/$AUDIS_TARGET/lib/libc.so
+        #sed -i -e '/GROUP/ c\GROUP ( libpthread.so.0 libpthread_nonshared.a )' $PREFIX/$AUDIS_TARGET/lib/libpthread.so
         # ... while we clearly see now that we just remove the absolute pathes. 
-        cond sed -i -e "/GROUP/s%$PREFIX/$TARGET/lib/%%g" $PREFIX/$TARGET/lib/libc.so $PREFIX/$TARGET/lib/libpthread.so
+        cond sed -i -e "/GROUP/s%$PREFIX/$AUDIS_TARGET/lib/%%g" $PREFIX/$AUDIS_TARGET/lib/libc.so $PREFIX/$AUDIS_TARGET/lib/libpthread.so
     fi
 
     setx echo @@@@@@@@@
@@ -399,28 +332,28 @@ function doit() {
     cond cp -f $SOURCES/linux/include/linux/linkage.h $SYSROOTUSR/include/linux
     cond cp -f $SOURCES/linux/arch/$LINUXARCH/include/asm/linkage.h $SYSROOTUSR/include/asm
     cond cp -f $SOURCES/linux/include/linux/stringify.h $SYSROOTUSR/include/linux
-    cond make -j$JOBS TOOL_PRE_$AUDENV=${TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$TARGET/4.2.3 lib$AUDTARGET
-    cond make -j$JOBS TOOL_PRE_$AUDENV=${TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$TARGET/4.2.3 install_$AUDTARGET
+    cond make -j$j TOOL_PRE_$AUDENV=${AUDIS_TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$AUDIS_TARGET/4.2.3 lib$AUDTARGET
+    cond make -j$j TOOL_PRE_$AUDENV=${AUDIS_TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$AUDIS_TARGET/4.2.3 install_$AUDTARGET
 
     setx echo @@@@@@@
     setx echo @ GDB @
     setx echo @@@@@@@
     mkdir -p $OBJECTS/gdb
     setx cd $OBJECTS/gdb
-    cond $SOURCES/gdb/configure --target=$TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
-    cond make -j$JOBS
-    cond make -j$JOBS install
+    cond $SOURCES/gdb/configure --target=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
+    cond make -j$j
+    cond make -j$j install
 
     setx echo @@@@@@@@@@@@@
     setx echo @ GDBSERVER @
     setx echo @@@@@@@@@@@@@
     mkdir -p $OBJECTS/gdb/gdbserver
     setx cd $OBJECTS/gdb/gdbserver
-    cond $SOURCES/gdb/gdb/gdbserver/configure --target=$TARGET --host=$TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
-    cond make -j$JOBS CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
-    cond make -j$JOBS install
+    cond $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
+    cond make -j$j CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
+    cond make -j$j install
 
-    if $inst; then
+    if $i; then
         setx echo @@@@@@@@@@@@@@@@@
         setx echo @ FINAL INSTALL @
         setx echo @@@@@@@@@@@@@@@@@
@@ -445,7 +378,7 @@ tail -f $SCREEN --pid=$$ | sed -e '/^real [0-9][0-9]*\.[0-9][0-9]$/d'\
                                -e 's/^++* time -p \(.*\)$/\1/'\
                                -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
 #tail -f $SCREEN --pid=$$&
-if [ -z "$sim" ]; then
+if ! $s; then
     swap >$log 2>&1
 else
     swap >/dev/null 2>&1

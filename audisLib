@@ -1,0 +1,249 @@
+# These settings are almost always a good idea.
+set -e
+set -o pipefail
+
+# Check if the word $2 is in list $1.
+isIn() { for index in $1; do if [ $index == "$2" ]; then return 0; fi; done; return 1;}
+
+# Print the commands while they are executed.
+function setx() {
+    set -x
+    $* 2>&1
+    { set +x; } 2>/dev/null
+}
+
+# Print to stderr and exit with non-zero exit status.
+usageWrapper() {
+    if [ -z "$prnt" ]; then
+        prnt="`usage`"
+        prnt="$prnt\n         -h:     Print this message."
+        if [ -n "$AUDIS_TOOLCHAINS" ]; then
+            prnt="$prnt\nList of available toolchains:"
+            prnt="$prnt\n$AUDIS_TOOLCHAINS"
+            if [ -n "$AUDIS_BOARDS" ]; then
+                prnt="$prnt\nList of available boards for toolchain $AUDIS_TOOLCHAIN:"
+                prnt="$prnt\n$AUDIS_BOARDS"
+            fi
+        fi
+        echo -e "$prnt" 1>&2
+        exit 1;
+    fi
+}
+
+# Set AUDIS_SOURCE_PATH.
+audisSourcePath() {
+    local second="Set\ view:\ ..\ NONE\ ..$"
+    if [[ `cleartool pwv` =~ $second ]]; then
+        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
+        local view="${BASH_REMATCH[1]}";
+        if [[ $view =~ NONE ]]; then
+            if ! [ -d "$AUDIS_SOURCE_PATH/pkgs" ]; then
+                echo "This script requires either a CleadCase AuDis view being set" 1>&2
+                echo "or an environment variable named \$AUDIS_VIEW_PATH to point" 1>&2
+                echo "to a directory containing the \"pkgs\" and (optionally) the" 1>&2
+                echo "\"ownsrc\" subdirectories." 1>&2
+                usageWrapper
+            fi
+        else
+            AUDIS_SOURCE_PATH=`sed -ne "s%^[^ ]* \(.*$view\)%\1%p" ~/.ccase_svreg`/audis_dev/src
+        fi
+    else
+        AUDIS_SOURCE_PATH=/audis_dev/src
+    fi
+}
+
+# Set AUDIS_VERSION.
+audisVersion() {
+    audisSourcePath # Just to ensure if we have set a view at all.
+    if [ -n "`cleartool pwv | sed -ne '/Au/p'`" ]; then
+        AUDIS_VERSION=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
+        if [ -z "$AUDIS_VERSION" ]; then
+            echo "The view must be a valid AuDis view, i.e. a view" 1>&2
+            echo "that has been created with the makeView script." 1>&2
+            usageWrapper
+        fi
+    else
+        AUDIS_VERSION=`echo "$AUDIS_VIEW_PATH" | sed -ne "s%.*\([23]\)[^23]*%\1%p"`
+        if [ -z "$AUDIS_VERSION" ]; then
+            echo "The content of the \$AUDIS_SOURCE_PATH environment variable" 1>&2
+            echo "must indicate the AuDis version by containing either the" 1>&2
+            echo "digit 2 or 3." 1>&2
+            usageWrapper
+        fi
+    fi
+}
+
+# Set AUDIS_TOOLCHAINS.
+audisToolchains() {
+    audisVersion
+    if [ "$AUDIS_VERSION" == "2" ]; then
+        AUDIS_TOOLCHAINS="arm i686 mipsel mipseb powerpc"
+    elif [ "$AUDIS_VERSION" == "3" ]; then 
+        AUDIS_TOOLCHAINS="arm i686"
+    fi
+}
+
+# Sets AUDIS_PARAMETER1 ... AUDIS_PARAMETERn and the
+# number of parameters (AUDIS_NUMBER) and the variable
+# AUDIS_INTERACTIVE to either true or false.
+# Furthermore, one-character variables are set according
+# to the available options.
+# Example usage:
+# $AUDIS_OPTIONS="h n: c o j:"
+# audisOptions "$@"
+# With $@="-nh -hj 40 xxx", this yields:
+# h=true
+# n=h
+# c=false
+# o=false
+# j=40
+# This may be verified with the following lines:
+# for index in $AUDIS_OPTIONS; do
+#     I=${index%:}
+#     echo "$I=${!I}";
+# done
+audisOptions() {
+    audisToolchains
+    for index in $AUDIS_OPTIONS; do
+        eval "${index%:}=false";
+    done
+    # $o is always used, so we set it explicitly here
+    # so that we still have a well defined value it it
+    # is not part of the option string.
+    o=false
+    while getopts "h $AUDIS_OPTIONS" opt; do
+        if [ "$opt" != "?" ]; then
+            if [ -z $OPTARG ]; then
+                if [ "$opt" == "h" ]; then
+                    usageWrapper
+                else
+                    eval "$opt=true"
+                fi
+            else
+                eval "$opt=$OPTARG"
+            fi
+        else usageWrapper; fi
+    done
+    shift $((OPTIND-1))
+    local count=0
+    for index in "$@"; do
+        count=`expr $count + 1`
+        eval "AUDIS_PARAMETER$count=$index"
+    done
+    AUDIS_NUMBER=$#
+    if [ "$AUDIS_NUMBER" == "0" ]; then AUDIS_INTERACTIVE=true;
+    else AUDIS_INTERACTIVE=false; fi
+}
+
+audisPrologue() {
+    audisOptions "$@"
+    if $AUDIS_INTERACTIVE; then
+        echo This is the AuDis 2 / 3 `basename $0` script. It is only that verbose if 1>&2
+        echo you call it without any command line parameters but works non-interactive if 1>&2
+        echo you pass sufficient information on the command line, allowing its use in other 1>&2
+        echo non-interactive scripts. Just call the script with the -h option to see how to 1>&2
+        echo use the script in non-interactive mode and for a description of its available 1>&2
+        echo options. 1>&2
+    fi
+}
+
+# Set AUDIS_TOOLCHAIN.
+audisToolchain() {
+    audisPrologue "$@"
+    while ! isIn "$AUDIS_TOOLCHAINS" "$AUDIS_PARAMETER1"; do
+        echo -e "The first parameter must be a valid toolchain." 1>&2
+        if $AUDIS_INTERACTIVE; then
+            read -p"Available toolchains [$AUDIS_TOOLCHAINS]: " AUDIS_PARAMETER1 1>&2
+        else usageWrapper; fi
+    done
+    AUDIS_TOOLCHAIN=$AUDIS_PARAMETER1
+}
+
+# Set AUDIS_TARGET.
+audisTarget() {
+    audisToolchain "$@"
+    AUDIS_TARGET="$AUDIS_TOOLCHAIN-audis$AUDIS_VERSION-linux-gnueabi"
+    if $o; then
+        if [ "$AUDIS_VERSION" == "2" ]; then
+            AUDIS_TARGET=$AUDIS_TOOLCHAIN-v42;
+            if [ "$AUDIS_TOOLCHAIN" == "mipsel" ]; then AUDIS_TARGET=mips-v42; fi
+            if [ "$AUDIS_TOOLCHAIN" == "mipseb" ]; then AUDIS_TARGET=mips-v42eb; fi
+        else
+            AUDIS_TARGET=$AUDIS_TOOLCHAIN-v47;
+        fi
+    fi
+}
+
+# Set AUDIS_TOOL_PATH if it is not set already.
+audisToolPath() {
+    audisTarget "$@"
+    local generated=$AUDIS_SOURCE_PATH/generated
+    if [ -z $AUDIS_TOOL_PATH ]; then 
+        if $o; then
+            AUDIS_TOOL_PATH=$generated/toolchain
+        else
+            AUDIS_TOOL_PATH=$generated/nsr/toolchain/$AUDIS_TARGET
+        fi
+    fi
+}
+
+# Set AUDIS_TOOL_PREFIX
+audisToolPrefix() {
+    audisToolPath "$@"
+    AUDIS_TOOL_PREFIX="$AUDIS_TOOL_PATH/bin/$AUDIS_TARGET-";
+}
+
+# Set AUDIS_ARCH.
+audisArch() {
+    audisToolPrefix "$@"
+    case $AUDIS_TOOLCHAIN in
+        mipsel | mipseb)
+            AUDIS_ARCH=mips
+            ;;
+        i686)
+            AUDIS_ARCH=x86
+            ;;
+        *)
+            AUDIS_ARCH=$1
+            ;;
+    esac
+}
+
+# Set AUDIS_BOARDS.
+audisBoards() {
+    audisArch "$@"
+    if [ -d $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs ]; then
+        AUDIS_BOARDS=$(find $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs -name "*_defconfig" -printf "%f "\
+                       | sed -e 's/_defconfig//g' | sed -e 's/ $//')
+    else
+        echo "Your kernel source tree seems to be messed up." 1>&2
+        echo "Could not find the directory containing default configurations." 1>&2
+        echo "in $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs" 1>&2
+        usageWrapper
+    fi
+}
+
+# Set AUDIS_KERNEL.
+audisKernel() {
+    audisBoards "$@"
+    case $AUDIS_TOOLCHAIN in
+        i686)
+            AUDIS_KERNEL=bzImage
+            ;;
+        *)
+            AUDIS_KERNEL=uImage
+            ;;
+    esac
+}
+
+# Set AUDIS_BOARD.
+audisBoard() {
+    audisKernel "$@"
+    while ! isIn "$AUDIS_BOARDS" "$AUDIS_PARAMETER2"; do
+        echo -e "The second parameter must be a valid board." 1>&2
+        if $AUDIS_INTERACTIVE; then
+            read -p"Available boards [$AUDIS_BOARDS]: " AUDIS_PARAMETER2 1>&2
+        else usageWrapper $AUDIS_PARAMETER1; fi
+    done
+    AUDIS_BOARD=$AUDIS_PARAMETER2
+}
