@@ -9,10 +9,9 @@ usage() {
     echo "         -j jobs Do this many jobs in parallel."
 }
 audisBoard "$@"
-if ! $j; then j=40; fi
+if [ "$j" == "false" ]; then j=40; fi
 
 if $AUDIS_INTERACTIVE; then
-    echo
     read -p"Any additional parameter for the rootfs build: " AUDIS_PARAMETER3 1>&2
 fi
 
@@ -22,15 +21,24 @@ kernel=/tftpboot/$USER/$AUDIS_ARCH/$AUDIS_BOARD
 
 if $c; then setx rm -rf $rootfsdir $kernel; exit 0; fi
 
+# Setup pretty output & logging.
+tail -f $SCREEN --pid $$ | sed -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
+mkdir -p $GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD
+log=$GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/build.log
+rm -f $log
+exec 4>&1
+trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
+# Let's begin with rootfs setup.
+swap banner "SETUP NEEDED TO BOOT" >>$log 2>&1
 # Ensure that our destination directories are there.
-mkdir -p $rootfsDir `dirname $kernel`
+swap setx mkdir -p $rootfsDir `dirname $kernel` >>$log 2>&1
 # We need to set world writable permissions because booting
 # the system will make everything to be owned by root.
-sudo chmod -R 777 $rootfsDir
+swap setx sudo chmod -R 777 $rootfsDir >>$log 2>&1
 # Let's start with a clean state
-rm -rf $rootfsDir/* $kernel
+swap setx rm -rf $rootfsDir/* $kernel >>$log 2>&1
 # Creating the directories that need initial content.
-mkdir $rootfsDir/etc $rootfsDir/sbin $rootfsDir/dev $rootfsDir/audislib
+swap setx mkdir $rootfsDir/etc $rootfsDir/sbin $rootfsDir/dev $rootfsDir/audislib >>$log 2>&1
 # The inittab creates the rest as needed during system boot time.
 cat <<! >$rootfsDir/etc/inittab
 # This inittab bootstraps a fully operational busybox-based
@@ -110,15 +118,18 @@ cat <<! >$rootfsDir/etc/inittab
 ::wait:sh -c "if [ -e /etc/rc.local ]; then sh /etc/rc.local; fi"
 !
 # We copy the busybox ...
-cp -a $GENERATED/busybox/$AUDIS_TOOLCHAIN/busybox $rootfsDir/sbin
+swap setx cp -a $GENERATED/busybox/$AUDIS_TOOLCHAIN/busybox $rootfsDir/sbin >>$log 2>&1
 # ... and provide init ...
-(cd $rootfsDir/sbin && ln -s busybox init)
+cd $rootfsDir/sbin >>$log 2>&1
+swap setx ln -s busybox init >>$log 2>&1
 # ... and the damned console device.
-sudo cp -a /dev/console $rootfsDir/dev
-# Finally, we copy the AuDis GLIBC.
-cp -a $GENERATED/nsr/toolchain/$AUDIS_TARGET/$AUDIS_TARGET/lib/*.so* $rootfsDir/audislib
+swap setx sudo cp -a /dev/console $rootfsDir/dev >>$log 2>&1
 
+# We copy the AuDis GLIBC.
+swap banner "COPYING AUDIS GLIBC AND LIBAUDIS" >>$log 2>&1
 # Anything from this point on is optional as it is not required to boot the system.
+swap setx cp -a $GENERATED/nsr/toolchain/$AUDIS_TARGET/$AUDIS_TARGET/lib/*.so* $rootfsDir/audislib >>$log 2>&1
+# System startup continues with this script.
 cat <<! >$rootfsDir/etc/rc.local
 #!/bin/sh
 # This is onlx needed due to a bug in our toolchain and will be fixed soon.
@@ -147,22 +158,33 @@ if [ -x /sbin/dropbear ]; then
     dropbear;
 fi
 !
-# We copy dropbear ...
-cp -a $GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbear $rootfsDir/sbin
-cp -a $GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbearkey $rootfsDir/sbin
-# ... and the gdb server.
-cp -a $GENERATED/nsr/toolchain/$AUDIS_TARGET/bin/$AUDIS_TARGET-gdbserver $rootfsDir/sbin/gdbserver
 
+swap banner "INSTALLATION OF KERNEL AND MODULES" >>$log 2>&1
 # Now we take care of the board specific
 # part, i.e. the kernel and its modules.
-cp -f $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$AUDIS_KERNEL $kernel
-make -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD INSTALL_MOD_PATH=$rootfsDir modules_install
+swap setx cp -f $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$AUDIS_KERNEL $kernel >>$log 2>&1
+swap setx make -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD INSTALL_MOD_PATH=$rootfsDir modules_install >>$log 2>&1
 # Add additional module directories as desired.
-echo "Building with $AUDIS_TOOL_PREFIX"
 MODULEDIRS=test_driver
 for i in $MODULEDIRS; do
-    mkdir -p $GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i
-    cp -f $AUDIS_SOURCE_PATH/pkgs/linux/drivers/aud/$i/* $GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i
-    make -j$j -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER3
-    make -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX INSTALL_MOD_PATH=$rootfsDir modules_install
+    swap setx mkdir -p $GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i >>$log 2>&1
+    swap setx cp -f $AUDIS_SOURCE_PATH/pkgs/linux/drivers/aud/$i/* $GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i >>$log 2>&1
+    swap setx make -j$j -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER3 >>$log 2>&1
+    swap setx make -C $GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$GENERATED/modules/$AUDIS_ARCH/$AUDIS_BOARD/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX INSTALL_MOD_PATH=$rootfsDir modules_install >>$log 2>&1
 done
+# We copy the gdb and dropbear server.
+swap banner "COPYING DROPBEAR AND GDB SERVER" >>$log 2>&1
+swap setx cp -a $GENERATED/nsr/toolchain/$AUDIS_TARGET/bin/$AUDIS_TARGET-gdbserver $rootfsDir/sbin/gdbserver >>$log 2>&1
+swap setx cp -a $GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbear $rootfsDir/sbin >>$log 2>&1
+swap setx cp -a $GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbearkey $rootfsDir/sbin >>$log 2>&1
+# Creation and copy of test suite.
+swap banner "CREATING AND INSTALLING TEST SUITE" >>$log 2>&1
+swap setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET >>$log 2>&1
+swap setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET install_rootfs >>$log 2>&1
+#swap setx cp -f $GENERATED/testsuite/$AUDIS_TARGET/testsuite $rootfsDir/sbin >>$log 2>&1
+# Done.
+swap banner "FINISHED SUCCESSFULLY" >>$log 2>&1
+
+# Dirty hack to wait for tail to print all its messages.
+sleep 1
+rm -f $SCREEN

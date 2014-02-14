@@ -12,6 +12,22 @@ function setx() {
     { set +x; } 2>/dev/null
 }
 
+# Prints a "box" arround a string.
+banner() {
+    l=`expr ${#1} + 4`
+    b=`head -c $l </dev/zero | tr '\0' '@'`
+    echo "$b" 1>&2
+    echo "@ $1 @" 1>&2
+    echo "$b" 1>&2
+}
+
+# We may do better with bash 4, see last post of
+# http://superuser.com/questions/184307/bash-create-anonymous-fifo
+SCREEN=`mktemp`
+function swap() {
+    "$@" 3>&1 1>&2 2>&3 | tee -a $SCREEN
+}
+
 # Print to stderr and exit with non-zero exit status.
 usageWrapper() {
     if [ -z "$prnt" ]; then
@@ -45,10 +61,10 @@ audisSourcePath() {
                 usageWrapper
             fi
         else
-            AUDIS_SOURCE_PATH=`sed -ne "s%^[^ ]* \(.*$view\)%\1%p" ~/.ccase_svreg`/audis_dev/src
+            export AUDIS_SOURCE_PATH=`sed -ne "s%^[^ ]* \(.*$view\)%\1%p" ~/.ccase_svreg`/audis_dev/src
         fi
     else
-        AUDIS_SOURCE_PATH=/audis_dev/src
+        export AUDIS_SOURCE_PATH=/audis_dev/src
     fi
 }
 
@@ -56,14 +72,14 @@ audisSourcePath() {
 audisVersion() {
     audisSourcePath # Just to ensure if we have set a view at all.
     if [ -n "`cleartool pwv | sed -ne '/Au/p'`" ]; then
-        AUDIS_VERSION=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
+        export AUDIS_VERSION=`cleartool catcs | sed -ne 's/element \* AUDIS.*\([23]\).*/\1/p'`
         if [ -z "$AUDIS_VERSION" ]; then
             echo "The view must be a valid AuDis view, i.e. a view" 1>&2
             echo "that has been created with the makeView script." 1>&2
             usageWrapper
         fi
     else
-        AUDIS_VERSION=`echo "$AUDIS_VIEW_PATH" | sed -ne "s%.*\([23]\)[^23]*%\1%p"`
+        export AUDIS_VERSION=`echo "$AUDIS_VIEW_PATH" | sed -ne "s%.*\([23]\)[^23]*%\1%p"`
         if [ -z "$AUDIS_VERSION" ]; then
             echo "The content of the \$AUDIS_SOURCE_PATH environment variable" 1>&2
             echo "must indicate the AuDis version by containing either the" 1>&2
@@ -77,9 +93,9 @@ audisVersion() {
 audisToolchains() {
     audisVersion
     if [ "$AUDIS_VERSION" == "2" ]; then
-        AUDIS_TOOLCHAINS="arm i686 mipsel mipseb powerpc"
+        export AUDIS_TOOLCHAINS="arm i686 mipsel mipseb powerpc"
     elif [ "$AUDIS_VERSION" == "3" ]; then 
-        AUDIS_TOOLCHAINS="arm i686"
+        export AUDIS_TOOLCHAINS="arm i686"
     fi
 }
 
@@ -156,20 +172,20 @@ audisToolchain() {
             read -p"Available toolchains [$AUDIS_TOOLCHAINS]: " AUDIS_PARAMETER1 1>&2
         else usageWrapper; fi
     done
-    AUDIS_TOOLCHAIN=$AUDIS_PARAMETER1
+    export AUDIS_TOOLCHAIN=$AUDIS_PARAMETER1
 }
 
 # Set AUDIS_TARGET.
 audisTarget() {
     audisToolchain "$@"
-    AUDIS_TARGET="$AUDIS_TOOLCHAIN-audis$AUDIS_VERSION-linux-gnueabi"
+    export AUDIS_TARGET="$AUDIS_TOOLCHAIN-audis$AUDIS_VERSION-linux-gnueabi"
     if $o; then
         if [ "$AUDIS_VERSION" == "2" ]; then
-            AUDIS_TARGET=$AUDIS_TOOLCHAIN-v42;
-            if [ "$AUDIS_TOOLCHAIN" == "mipsel" ]; then AUDIS_TARGET=mips-v42; fi
-            if [ "$AUDIS_TOOLCHAIN" == "mipseb" ]; then AUDIS_TARGET=mips-v42eb; fi
+            export AUDIS_TARGET=$AUDIS_TOOLCHAIN-v42;
+            if [ "$AUDIS_TOOLCHAIN" == "mipsel" ]; then export AUDIS_TARGET=mips-v42; fi
+            if [ "$AUDIS_TOOLCHAIN" == "mipseb" ]; then export AUDIS_TARGET=mips-v42eb; fi
         else
-            AUDIS_TARGET=$AUDIS_TOOLCHAIN-v47;
+            export AUDIS_TARGET=$AUDIS_TOOLCHAIN-v47;
         fi
     fi
 }
@@ -177,12 +193,12 @@ audisTarget() {
 # Set AUDIS_TOOL_PATH if it is not set already.
 audisToolPath() {
     audisTarget "$@"
-    local generated=$AUDIS_SOURCE_PATH/generated
+    export AUDIS_GENERATED=$AUDIS_SOURCE_PATH/generated
     if [ -z $AUDIS_TOOL_PATH ]; then 
         if $o; then
-            AUDIS_TOOL_PATH=$generated/toolchain
+            export AUDIS_TOOL_PATH=$AUDIS_GENERATED/toolchain
         else
-            AUDIS_TOOL_PATH=$generated/nsr/toolchain/$AUDIS_TARGET
+            export AUDIS_TOOL_PATH=$AUDIS_GENERATED/nsr/toolchain/$AUDIS_TARGET
         fi
     fi
 }
@@ -190,7 +206,7 @@ audisToolPath() {
 # Set AUDIS_TOOL_PREFIX
 audisToolPrefix() {
     audisToolPath "$@"
-    AUDIS_TOOL_PREFIX="$AUDIS_TOOL_PATH/bin/$AUDIS_TARGET-";
+    export AUDIS_TOOL_PREFIX="$AUDIS_TOOL_PATH/bin/$AUDIS_TARGET-";
 }
 
 # Set AUDIS_ARCH.
@@ -198,13 +214,13 @@ audisArch() {
     audisToolPrefix "$@"
     case $AUDIS_TOOLCHAIN in
         mipsel | mipseb)
-            AUDIS_ARCH=mips
+            export AUDIS_ARCH=mips
             ;;
         i686)
-            AUDIS_ARCH=x86
+            export AUDIS_ARCH=x86
             ;;
         *)
-            AUDIS_ARCH=$1
+            export AUDIS_ARCH=$1
             ;;
     esac
 }
@@ -213,7 +229,7 @@ audisArch() {
 audisBoards() {
     audisArch "$@"
     if [ -d $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs ]; then
-        AUDIS_BOARDS=$(find $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs -name "*_defconfig" -printf "%f "\
+        export AUDIS_BOARDS=$(find $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs -name "*_defconfig" -printf "%f "\
                        | sed -e 's/_defconfig//g' | sed -e 's/ $//')
     else
         echo "Your kernel source tree seems to be messed up." 1>&2
@@ -228,10 +244,10 @@ audisKernel() {
     audisBoards "$@"
     case $AUDIS_TOOLCHAIN in
         i686)
-            AUDIS_KERNEL=bzImage
+            export AUDIS_KERNEL=bzImage
             ;;
         *)
-            AUDIS_KERNEL=uImage
+            export AUDIS_KERNEL=uImage
             ;;
     esac
 }
@@ -245,5 +261,5 @@ audisBoard() {
             read -p"Available boards [$AUDIS_BOARDS]: " AUDIS_PARAMETER2 1>&2
         else usageWrapper $AUDIS_PARAMETER1; fi
     done
-    AUDIS_BOARD=$AUDIS_PARAMETER2
+    export AUDIS_BOARD=$AUDIS_PARAMETER2
 }
