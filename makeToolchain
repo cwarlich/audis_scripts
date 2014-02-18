@@ -1,9 +1,9 @@
 #!/bin/bash
 source `dirname $0`/libEnv
-AUDIS_OPTIONS="s c r i m j: n:"
+AUDIS_OPTIONS="s c r i m j: n: N:"
 
 function usage() {
-    echo "Usage: $0 [-hscri] [-j jobs] [-n step] arch"
+    echo "Usage: $0 [-hscri] [-j jobs] [-n step] [-N step] toolchain"
     echo "Options: -s:     Just simulate, i.e. only prints what would be done."
     echo "         -c:     Delete all generated files."
     echo "         -r:     Create a toolchain with sysroot."
@@ -11,9 +11,10 @@ function usage() {
     echo "         -m:     Build libaudis with Manfred's old (GNU)makefile."
     echo "         -j jobs Do this many jobs in parallel."
     echo "         -n step Restart the build with that step."
+    echo "         -N step Stop the build after that step."
 }
 
-audisTarget "$@" # We don't want audisToolPath here, as we need full control where to install.
+audisGenerated "$@" # We don't want audisToolPath here, as we need full control where to install.
 if [ "$j" == "false" ]; then j=40; fi
 
 if [ "$n" != "false" ]; then
@@ -24,6 +25,18 @@ if [ "$n" != "false" ]; then
         fi
     else 
         echo "The argument to option -n must be a number." 1>&2
+        usageWrapper;
+    fi
+fi
+
+if [ "$N" != "false" ]; then
+    if [ "$N" -eq "$N" ] 2>/dev/null; then # Test if number.
+        if [ "$N" -lt "1" ]; then
+            echo "The argument to option -N must be a positive integer." 1>&2
+            usageWrapper;
+        fi
+    else 
+        echo "The argument to option -N must be a number." 1>&2
         usageWrapper;
     fi
 fi
@@ -146,7 +159,7 @@ else
     SYSROOTUSR=$SYSROOT/$AUDIS_TARGET
     WITHSYSROOT=
 fi
-mkdir -p $OBJECTS
+setx mkdir -p $OBJECTS
 log=$OBJECTS/build.log
 PATH=$PREFIX/bin:$PATH
 if ! $c && ! $s; then
@@ -154,17 +167,13 @@ if ! $c && ! $s; then
     trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
 fi
 
-function timed() {
-    setx time -p $*
-}
-
 if [ -n "$ARCHIVES" ]; then
     for index in $ARCHIVES/*.tar.*; do
         if [ -d $SOURCES/`tar -tf $index | grep "^[^/]*/$"` ]; then
             setx echo $index has already been unpacked.;
         else
-            mkdir -p $SOURCES
-            timed tar -xf $index -C $SOURCES;
+            setx mkdir -p $SOURCES
+            tar -xf $index -C $SOURCES;
         fi
     done
 fi
@@ -187,14 +196,21 @@ DOCURRENT=0
 function cond() {
     ((DOCURRENT++))
     if $s; then
-        setx echo Step $DOCURRENT:
-        timed echo $*
+        if [ $DOCURRENT -gt $LASTDONE ]; then
+            if [ "$N" == "false" ] || [ $DOCURRENT -le $N ]; then
+                setx echo Step $DOCURRENT:
+                echo $*
+                setx echo $*
+            fi
+        fi
     else
         if [ $DOCURRENT -gt $LASTDONE ]; then
-            setx echo Step $DOCURRENT:
-            timed $*
-            ((LASTDONE++))
-            echo $LASTDONE >$LASTDONEFILE
+            if [ "$N" == "false" ] || [ $DOCURRENT -le $N ]; then
+                setx echo Step $DOCURRENT:
+                setx $*
+                ((LASTDONE++))
+                echo $LASTDONE >$LASTDONEFILE
+            fi
         fi
     fi
 }
@@ -210,32 +226,29 @@ function doit() {
     fi
     
     banner "CHEAT"
-    mkdir -p $OBJECTS/glibc
-    setx cd $OBJECTS/glibc
-    mkdir -p $SYSROOTUSR
-    cond tar xf $SOURCES/glibc/baseLibsAud/$CHEATFILE
-    cond chmod -R 755 $CHEATDIR
-    cond cp -rf $CHEATDIR/* $SYSROOTUSR
+    cond mkdir -p $OBJECTS/glibc $SYSROOTUSR
+    cond tar -C $OBJECTS/glibc -xf $SOURCES/glibc/baseLibsAud/$CHEATFILE
+    cond chmod -R 755 $OBJECTS/glibc/$CHEATDIR
+    cond cp -rf $OBJECTS/glibc/$CHEATDIR/* $SYSROOTUSR
     cond cp -f $SOURCES/linux/include/linux/aud/* $SYSROOTUSR/include/linux/aud
 
     banner "BINUTILS"
-    mkdir -p $OBJECTS/binutils
+    cond mkdir -p $OBJECTS/binutils
     setx cd $OBJECTS/binutils
     cond $SOURCES/binutils/configure --target=$AUDIS_TARGET --prefix=$PREFIX $BINUTILSCONFIG $WITHSYSROOT
-    cond make -j$j
-    cond make -j$j install
+    cond make -C $OBJECTS/binutils -j$j
+    cond make -C $OBJECTS/binutils -j$j install
 
     banner "GCC"
-    mkdir -p $OBJECTS/$GCC
+    cond mkdir -p $OBJECTS/$GCC
     setx cd $OBJECTS/$GCC
     cond $SOURCES/$GCC/configure --target=$AUDIS_TARGET --prefix=$PREFIX --enable-languages=c,c++ --disable-libgomp $GCCCONFIG $WITHSYSROOT
-    cond make -j$j $GCCMAKE
-    cond make -j$j $GCCMAKE install
+    cond make -C $OBJECTS/$GCC -j$j $GCCMAKE
+    cond make -C $OBJECTS/$GCC -j$j $GCCMAKE install
 
     banner "LINUX HEADERS"
-    mkdir -p $OBJECTS/linux
-    setx cd $SOURCES/linux
-    cond make O=$OBJECTS/linux ARCH=$LINUXARCH INSTALL_HDR_PATH=$SYSROOTUSR headers_install
+    cond mkdir -p $OBJECTS/linux
+    cond make -C $SOURCES/linux O=$OBJECTS/linux ARCH=$LINUXARCH INSTALL_HDR_PATH=$SYSROOTUSR headers_install
 
     banner "GLIBC"
     setx cd $OBJECTS/glibc
@@ -243,7 +256,7 @@ function doit() {
     cond $SOURCES/glibc/configure --prefix=$PREFIX/$AUDIS_TARGET --host=$AUDIS_TARGET --build=i686-pc-linux --with-headers=$SYSROOTUSR/include --disable-sanity-checks --with-tls libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes $GLIBCCONFIG 
     cond cp -f $SOURCES/linux/include/linux/compiler.h $SYSROOTUSR/include/linux
     cond cp -f $SOURCES/glibc/rt/rt/internal.h $SYSROOTUSR/include/rt
-    cond make -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED
+    cond make -C $OBJECTS/glibc -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED
 
     banner "CLEAN INSTALL"
     cond rm -rf $PREFIX
@@ -251,23 +264,20 @@ function doit() {
         # Looks like we still need to cheat for the AuDis 3 ARM
         # build, but we are quite clean for everything else :-).
         banner "CHEAT INSTALL"
-        mkdir -p $SYSROOTUSR
-        cond cp -rf $CHEATDIR/* $SYSROOTUSR
+        cond mkdir -p $SYSROOTUSR
+        cond cp -rf $OBJECTS/glibc/$CHEATDIR/* $SYSROOTUSR
     fi
     banner "BINUTILS INSTALL"
-    setx cd $OBJECTS/binutils
-    cond make -j$j install
+    cond make -C $OBJECTS/binutils -j$j install
     banner "LINUX HEADERS INSTALL"
-    setx cd $SOURCES/linux
-    cond make O=$OBJECTS/linux ARCH=$LINUXARCH INSTALL_HDR_PATH=$SYSROOTUSR headers_install
+    cond make -C $SOURCES/linux O=$OBJECTS/linux ARCH=$LINUXARCH INSTALL_HDR_PATH=$SYSROOTUSR headers_install
     cond cp -rf $SOURCES/linux/include/linux/aud $SYSROOTUSR/include/linux
     banner "GLIBC HEADERS INSTALL"
-    setx cd $OBJECTS/glibc
     # This is how we did it before ...
     #cond tar xf $SOURCES/glibc/baseLibsAud/$CHEATFILE
-    #cond cp -rf $CHEATDIR/* $PREFIX/$AUDIS_TARGET
+    #cond cp -rf $OBJECTS/glibc/$CHEATDIR/* $PREFIX/$AUDIS_TARGET
     # ... and this is our clean approach as we do it now ...
-    cond make -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install_root=$SYSROOTUSR prefix="" install-headers
+    cond make -C $OBJECTS/glibc -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install_root=$SYSROOTUSR prefix="" install-headers
     cond cp -f $SOURCES/glibc/include/gnu/stubs.h $SYSROOTUSR/include/gnu
     cond cp -f $OBJECTS/glibc/bits/stdio_lim.h $SYSROOTUSR/include/bits
     cond cp -f $SOURCES/linux/include/linux/compiler.h $SYSROOTUSR/include/linux
@@ -278,19 +288,17 @@ function doit() {
     cond cp -f $OBJECTS/glibc/csu/crtn.o $SYSROOTUSR/lib
     # ... so that we are again able to install gcc (and glibc).
     banner "GCC INSTALL"
-    setx cd $OBJECTS/$GCC
-    cond cp gcc/$LIMITSDIR/limits.h gcc/$LIMITSDIR/limits.h.sav
+    cond cp $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h gcc/$LIMITSDIR/limits.h.sav
     # Does the same as
-    # cat gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h >gcc/$LIMITSDIR/limits.h
+    # cat $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h >$OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h
     # but without redirection, which can't be passed to a function, i.e. cond.
-    cond sed -ne "wgcc/$LIMITSDIR/limits.h" gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h
-    cond make -j$j $GCCMAKE install
+    cond sed -ne "$OBJECTS/$GCC/wgcc/$LIMITSDIR/limits.h" $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h
+    cond make -C $OBJECTS/$GCC -j$j $GCCMAKE install
     banner "GLIBC INSTALL"
-    setx cd $OBJECTS/glibc
     if [ "$AUDIS_TOOLCHAIN" == "powerpc" ]; then
         cond cp -f $OBJECTS/glibc/$CHEATDIR/include/sys/io.h $PREFIX/$AUDIS_TARGET/include/sys
     fi
-    cond make -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install
+    cond make -C $OBJECTS/glibc -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install
     cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib
     cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib/libthread_db.a
     # FIXME: No output.
@@ -303,46 +311,40 @@ function doit() {
     fi
 
     banner "AUDIS"
-    setx cd $SOURCES/../ownsrc/aud_lib
     cond cp -f $SOURCES/linux/include/linux/linkage.h $SYSROOTUSR/include/linux
     cond cp -f $SOURCES/linux/arch/$LINUXARCH/include/asm/linkage.h $SYSROOTUSR/include/asm
     cond cp -f $SOURCES/linux/include/linux/stringify.h $SYSROOTUSR/include/linux
     if $m; then
-        cond make -j$j TOOL_PRE_$AUDENV=${AUDIS_TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$AUDIS_TARGET/4.2.3 lib$AUDTARGET
-        cond make -j$j TOOL_PRE_$AUDENV=${AUDIS_TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$AUDIS_TARGET/4.2.3 install_$AUDTARGET
+        cond make -C $SOURCES/../ownsrc/aud_lib -j$j TOOL_PRE_$AUDENV=${AUDIS_TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$AUDIS_TARGET/4.2.3 lib$AUDTARGET
+        cond make -C $SOURCES/../ownsrc/aud_lib -j$j TOOL_PRE_$AUDENV=${AUDIS_TARGET}- TOOL_LIB_BASE_$AUDENV=$SYSROOTUSR/lib GCC_LIB_BASE_$AUDENV=$PREFIX/lib/gcc/$AUDIS_TARGET/4.2.3 install_$AUDTARGET
     else
-        cond make -j$j -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET AUDIS_TOOL_PATH=$PREFIX
-        cond make -j$j -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET AUDIS_TOOL_PATH=$PREFIX install
+        cond make -C $SOURCES/../ownsrc/aud_lib -j$j -f Makefile Platforms=$AUDIS_TARGET AUDIS_TOOL_PATH=$PREFIX
+        cond make -C $SOURCES/../ownsrc/aud_lib -j$j -f Makefile Platforms=$AUDIS_TARGET AUDIS_TOOL_PATH=$PREFIX install
     fi
 
     banner "GDB"
-    mkdir -p $OBJECTS/gdb
+    cond mkdir -p $OBJECTS/gdb
     setx cd $OBJECTS/gdb
     cond $SOURCES/gdb/configure --target=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
-    cond make -j$j
-    cond make -j$j install
+    cond make -C $OBJECTS/gdb -j$j
+    cond make -C $OBJECTS/gdb -j$j install
 
     banner "GDBSERVER"
-    mkdir -p $OBJECTS/gdb/gdbserver
+    cond mkdir -p $OBJECTS/gdb/gdbserver
     setx cd $OBJECTS/gdb/gdbserver
     cond $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
-    cond make -j$j CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
-    cond make -j$j install
+    cond make -C $OBJECTS/gdb/gdbserver -j$j CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
+    cond make -C $OBJECTS/gdb/gdbserver -j$j install
 
     if $i; then
         banner "FINAL INSTALL"
         if [ -d $AUDIS_TOOL_PATH ]; then cond cp -Rf $PREFIX/* $AUDIS_TOOL_PATH; else cond false; fi
     fi
 
-    banner "FINISHED SUCCESFULLY" >&2
+    banner "FINISHED SUCCESFULLY"
 }
 
-tail -f $SCREEN --pid=$$ | sed -e '/^real [0-9][0-9]*\.[0-9][0-9]$/d'\
-                               -e '/^user [0-9][0-9]*\.[0-9][0-9]$/d'\
-                               -e '/^sys [0-9][0-9]*\.[0-9][0-9]$/d'\
-                               -e 's/^++* time -p echo \(.*\)$/\1/'\
-                               -e 's/^++* echo \(.*\)$/\1/'\
-                               -e 's/^++* time -p \(.*\)$/\1/'\
+tail -f $SCREEN --pid=$$ | sed -e 's/^++* echo \(.*\)$/\1/'\
                                -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
 #tail -f $SCREEN --pid=$$&
 
