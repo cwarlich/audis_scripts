@@ -1,45 +1,14 @@
 #!/bin/bash
-source `dirname $0`/audisLib
-AUDIS_OPTIONS="c o j:"
-
+source `dirname $0`/libFrame
 usage() {
-    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] [toolchain board [build-parameter]]"
-    echo "Options: -c:     Delete all generated files."
-    echo "         -o:     Use old style toolchains."
-    echo "         -j jobs Do this many jobs in parallel."
-}
-
+    usageTemplate "[toolchain board [build-parameter]]"
+};
 audisBoard "$@"
-if [ "$j" == "false" ]; then j=40; fi
 
-if $AUDIS_INTERACTIVE; then
-    read -p"Any additional parameter for the kernel build: " AUDIS_PARAMETER3 1>&2
-fi
-
-destdir=$AUDIS_GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD
-
-if $c; then setx rm -rf $destdir; exit 0; fi
-
-tail -f $SCREEN --pid $$ | sed -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
-
-echo "Building with $AUDIS_TOOL_PREFIX"
-if [ -x ${AUDIS_TOOL_PREFIX}gdb ]; then
-    mkdir -p $destdir
-    log=$destdir/build.log
-    rm -f $log
-    exec 4>&1
-    trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
+kernel() {
     swap banner "Configuring kernel" >>$log 2>&1
     swap setx make -C $AUDIS_SOURCE_PATH/pkgs/linux O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH ${AUDIS_BOARD}_defconfig >>$log 2>&1
     swap banner "Building kernel" >>$log 2>&1
     swap setx make -j$jobs -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 $AUDIS_KERNEL >>$log 2>&1
-    swap banner "FINISHED SUCCESSFULLY" >>$log 2>&1
-else
-    echo "The required toolchain seems to be missing or incomplete;"
-    echo "run \"makeToolchain $AUDIS_TOOLCHAIN\""
-    echo "and / or fix or unset your AUDIS_TOOL_PATH first."
-fi
-
-# Dirty hack to wait for tail to print all its messages.
-sleep 1
-rm -f $SCREEN
+}
+doit kernel

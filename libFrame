@@ -1,0 +1,46 @@
+#!/bin/echo This is a library which must not be called directly.
+source `dirname $0`/libEnv
+
+AUDIS_OPTIONS="c o j:"
+usageTemplate() {
+    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] $1"
+    echo "Options: -c:     Delete all generated files."
+    echo "         -o:     Use old style toolchains."
+    echo "         -j jobs Do this many jobs in parallel."
+}
+
+tail -f $SCREEN --pid $$ | sed -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
+
+doit() {
+    if [ "$j" == "false" ]; then j=40; fi
+    destdir=$AUDIS_GENERATED/$1/$AUDIS_TOOLCHAIN/$AUDIS_BOARD
+    if $AUDIS_INTERACTIVE; then
+        local m="Any additional parameter for the $1 build: "
+        if [ -z "$AUDIS_BOARD" ]; then
+            read -p"$m" AUDIS_PARAMETER2 1>&2
+        else
+            read -p"$m" AUDIS_PARAMETER3 1>&2
+        fi
+    fi
+    if $c; then
+        setx rm -rf $destdir; exit 0;
+        if [ "$1" == "rootfs" ]; then rm -rf $rootfsDir $kernel; fi
+    fi
+    echo Using toolchain ${AUDIS_TOOL_PREFIX}
+    if [ -x ${AUDIS_TOOL_PREFIX}gdb ]; then
+        mkdir -p $destdir
+        log=$destdir/build.log
+        rm -f $log
+        exec 4>&1
+        trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
+        $1
+        swap banner "FINISHED SUCCESSFULLY" >>$log 2>&1
+        # Dirty hack to wait for tail to print all its messages.
+        sleep 1
+        rm -f $SCREEN
+    else
+        echo "The required toolchain seems to be missing or incomplete;"
+        echo "run \"makeToolchain $AUDIS_TOOLCHAIN\""
+        echo "and / or fix or unset your AUDIS_TOOL_PATH first."
+    fi
+}

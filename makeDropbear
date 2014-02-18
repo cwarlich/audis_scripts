@@ -1,47 +1,16 @@
 #!/bin/bash
-source `dirname $0`/audisLib
-AUDIS_OPTIONS="c o j:"
-
+source `dirname $0`/libFrame
 usage() {
-    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] [[toolchain] build-parameter]"
-    echo "Options: -c:     Delete all generated files."
-    echo "         -o:     Use old style toolchains."
-    echo "         -j jobs Do this many jobs in parallel."
-}
-
+    usageTemplate "[toolchain [build-parameter]]"
+};
 audisToolPrefix "$@"
-if [ "$j" == "false" ]; then j=40; fi
 
-if $AUDIS_INTERACTIVE; then
-    read -p"Any additional parameter for the dropbear build: " AUDIS_PARAMETER2 1>&2
-fi
-
-destdir=$AUDIS_GENERATED/dropbear/$AUDIS_TOOLCHAIN/
-
-if $c; then setx rm -rf $destdir; exit 0; fi
-
-tail -f $SCREEN --pid $$ | sed -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
-
-echo Using toolchain ${AUDIS_TOOL_PREFIX}
-if [ -x ${AUDIS_TOOL_PREFIX}gdb ]; then
-    mkdir -p $destdir
-    log=$destdir/build.log
-    rm -f $log
-    exec 4>&1
-    trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
+dropbear() {
     swap banner "Configuring dropbear" >>$log 2>&1
     for i in strip ar ranlib install; do export `echo $i | tr '[a-z]' '[A-Z]'`=$AUDIS_TOOL_PREFIX$i; done
     export CC=${AUDIS_TOOL_PREFIX}gcc
     swap setx $AUDIS_SOURCE_PATH/pkgs/dropbear/configure --host=$AUDIS_TARGET --build=i686-pc-linux --disable-zlib >>$log 2>&1
     swap banner "Building dropbear" >>$log 2>&1
     swap setx make -j$jobs -C $destdir $AUDIS_PARAMETER2 >>$log 2>&1
-    swap banner "FINISHED SUCCESSFULLY" >>$log 2>&1
-else
-    echo "The required toolchain seems to be missing or incomplete;"
-    echo "run \"makeToolchain $AUDIS_TOOLCHAIN\""
-    echo "and / or fix or unset your AUDIS_TOOL_PATH first."
-fi
-
-# Dirty hack to wait for tail to print all its messages.
-sleep 1
-rm -f $SCREEN
+}
+doit dropbear

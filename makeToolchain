@@ -1,5 +1,5 @@
 #!/bin/bash
-source `dirname $0`/audisLib
+source `dirname $0`/libEnv
 AUDIS_OPTIONS="s c r i m j: n:"
 
 function usage() {

@@ -1,3 +1,4 @@
+#!/bin/echo This is a library which must not be called directly.
 # These settings are almost always a good idea.
 set -e
 set -o pipefail
