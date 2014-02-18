@@ -130,7 +130,7 @@ SOURCES=$AUDIS_SOURCE_PATH/pkgs
 TRUSTED=/audislib
 
 if $r; then
-    ROOTDIR=$AUDIS_SOURCE_PATH/generated/sr
+    ROOTDIR=$AUDIS_GENERATED/sr
     PREFIX=$ROOTDIR/toolchain/$AUDIS_TARGET
     OBJECTS=$ROOTDIR/objects/$AUDIS_TARGET
     #ARCHIVES=$ROOT/archives/$VERSION
@@ -138,7 +138,7 @@ if $r; then
     SYSROOTUSR=$SYSROOT/usr
     WITHSYSROOT=--with-sysroot=$SYSROOT
 else
-    ROOTDIR=$AUDIS_SOURCE_PATH/generated/nsr
+    ROOTDIR=$AUDIS_GENERATED/nsr
     PREFIX=$ROOTDIR/toolchain/$AUDIS_TARGET
     OBJECTS=$ROOTDIR/objects/$AUDIS_TARGET
     #ARCHIVES=$ROOT/archives/$VERSION

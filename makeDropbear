@@ -3,7 +3,7 @@ source `dirname $0`/audisLib
 AUDIS_OPTIONS="c o j:"
 
 usage() {
-    echo "Usage: $0 [-h] [-c] [-j jobs] [[toolchain] build-parameter]"
+    echo "Usage: $0 [-h] [-c] [-o] [-j jobs] [[toolchain] build-parameter]"
     echo "Options: -c:     Delete all generated files."
     echo "         -o:     Use old style toolchains."
     echo "         -j jobs Do this many jobs in parallel."
@@ -16,8 +16,7 @@ if $AUDIS_INTERACTIVE; then
     read -p"Any additional parameter for the dropbear build: " AUDIS_PARAMETER2 1>&2
 fi
 
-GENERATED=$AUDIS_SOURCE_PATH/generated
-destdir=$GENERATED/dropbear/$AUDIS_TOOLCHAIN/
+destdir=$AUDIS_GENERATED/dropbear/$AUDIS_TOOLCHAIN/
 
 if $c; then setx rm -rf $destdir; exit 0; fi
 

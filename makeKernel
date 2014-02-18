@@ -16,8 +16,7 @@ if $AUDIS_INTERACTIVE; then
     read -p"Any additional parameter for the kernel build: " AUDIS_PARAMETER3 1>&2
 fi
 
-GENERATED=$AUDIS_SOURCE_PATH/generated
-destdir=$GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD
+destdir=$AUDIS_GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD
 
 if $c; then setx rm -rf $destdir; exit 0; fi
 
