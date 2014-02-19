@@ -199,14 +199,14 @@ cond() {
         if [ $DOCURRENT -gt $LASTDONE ]; then
             if [ "$N" == "false" ] || [ $DOCURRENT -le $N ]; then
                 setx echo Step $DOCURRENT:
-                setx echo $*
+                setx echo "$@"
             fi
         fi
     else
         if [ $DOCURRENT -gt $LASTDONE ]; then
             if [ "$N" == "false" ] || [ $DOCURRENT -le $N ]; then
                 setx echo Step $DOCURRENT:
-                setx $*
+                setx "$@"
                 ((LASTDONE++))
                 echo $LASTDONE >$LASTDONEFILE
             fi
@@ -225,34 +225,31 @@ function doit() {
     fi
     
     banner "CHEAT"
-    setx mkdir -p $OBJECTS/glibc $SYSROOTUSR
+    cond mkdir -p $OBJECTS/glibc $SYSROOTUSR
     cond tar -C $OBJECTS/glibc -xf $SOURCES/glibc/baseLibsAud/$CHEATFILE
     cond chmod -R 755 $OBJECTS/glibc/$CHEATDIR
     cond cp -rf $OBJECTS/glibc/$CHEATDIR/* $SYSROOTUSR
     cond cp -f $SOURCES/linux/include/linux/aud/* $SYSROOTUSR/include/linux/aud
 
     banner "BINUTILS"
-    setx mkdir -p $OBJECTS/binutils
-    setx cd $OBJECTS/binutils
-    cond $SOURCES/binutils/configure --target=$AUDIS_TARGET --prefix=$PREFIX $BINUTILSCONFIG $WITHSYSROOT
+    cond mkdir -p $OBJECTS/binutils
+    cond "cd $OBJECTS/binutils && $SOURCES/binutils/configure --target=$AUDIS_TARGET --prefix=$PREFIX $BINUTILSCONFIG $WITHSYSROOT"
     cond make -C $OBJECTS/binutils -j$j
     cond make -C $OBJECTS/binutils -j$j install
 
     banner "GCC"
-    setx mkdir -p $OBJECTS/$GCC
-    setx cd $OBJECTS/$GCC
-    cond $SOURCES/$GCC/configure --target=$AUDIS_TARGET --prefix=$PREFIX --enable-languages=c,c++ --disable-libgomp $GCCCONFIG $WITHSYSROOT
+    cond mkdir -p $OBJECTS/$GCC
+    cond "cd $OBJECTS/$GCC && $SOURCES/$GCC/configure --target=$AUDIS_TARGET --prefix=$PREFIX --enable-languages=c,c++ --disable-libgomp $GCCCONFIG $WITHSYSROOT"
     cond make -C $OBJECTS/$GCC -j$j $GCCMAKE
     cond make -C $OBJECTS/$GCC -j$j $GCCMAKE install
 
     banner "LINUX HEADERS"
-    setx mkdir -p $OBJECTS/linux
+    cond mkdir -p $OBJECTS/linux
     cond make -C $SOURCES/linux O=$OBJECTS/linux ARCH=$LINUXARCH INSTALL_HDR_PATH=$SYSROOTUSR headers_install
 
     banner "GLIBC"
-    setx cd $OBJECTS/glibc
     cond cp -f $SOURCES/glibc/$GLIBCCONFIGPARAMS $OBJECTS/glibc/configparms
-    cond $SOURCES/glibc/configure --prefix=$PREFIX/$AUDIS_TARGET --host=$AUDIS_TARGET --build=i686-pc-linux --with-headers=$SYSROOTUSR/include --disable-sanity-checks --with-tls libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes $GLIBCCONFIG 
+    cond "cd $OBJECTS/glibc && $SOURCES/glibc/configure --prefix=$PREFIX/$AUDIS_TARGET --host=$AUDIS_TARGET --build=i686-pc-linux --with-headers=$SYSROOTUSR/include --disable-sanity-checks --with-tls libc_cv_forced_unwind=yes libc_cv_c_cleanup=yes $GLIBCCONFIG"
     cond cp -f $SOURCES/linux/include/linux/compiler.h $SYSROOTUSR/include/linux
     cond cp -f $SOURCES/glibc/rt/rt/internal.h $SYSROOTUSR/include/rt
     cond make -C $OBJECTS/glibc -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED
@@ -263,7 +260,7 @@ function doit() {
         # Looks like we still need to cheat for the AuDis 3 ARM
         # build, but we are quite clean for everything else :-).
         banner "CHEAT INSTALL"
-        setx mkdir -p $SYSROOTUSR
+        cond mkdir -p $SYSROOTUSR
         cond cp -rf $OBJECTS/glibc/$CHEATDIR/* $SYSROOTUSR
     fi
     banner "BINUTILS INSTALL"
@@ -280,7 +277,7 @@ function doit() {
     cond cp -f $SOURCES/glibc/include/gnu/stubs.h $SYSROOTUSR/include/gnu
     cond cp -f $OBJECTS/glibc/bits/stdio_lim.h $SYSROOTUSR/include/bits
     cond cp -f $SOURCES/linux/include/linux/compiler.h $SYSROOTUSR/include/linux
-    setx mkdir -p $SYSROOTUSR/lib
+    cond mkdir -p $SYSROOTUSR/lib
     cond cp -f $OBJECTS/glibc/csu/crti.o $SYSROOTUSR/lib
     cond cp -f $OBJECTS/glibc/libc.so $SYSROOTUSR/lib
     cond cp -f $OBJECTS/glibc/dlfcn/libdl.so $SYSROOTUSR/lib
@@ -322,16 +319,14 @@ function doit() {
     fi
 
     banner "GDB"
-    setx mkdir -p $OBJECTS/gdb
-    setx cd $OBJECTS/gdb
-    cond $SOURCES/gdb/configure --target=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
+    cond mkdir -p $OBJECTS/gdb
+    cond "cd $OBJECTS/gdb && $SOURCES/gdb/configure --target=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT"
     cond make -C $OBJECTS/gdb -j$j
     cond make -C $OBJECTS/gdb -j$j install
 
     banner "GDBSERVER"
-    setx mkdir -p $OBJECTS/gdb/gdbserver
-    setx cd $OBJECTS/gdb/gdbserver
-    cond $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
+    cond mkdir -p $OBJECTS/gdb/gdbserver
+    cond "cd $OBJECTS/gdb/gdbserver && $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT"
     cond make -C $OBJECTS/gdb/gdbserver -j$j CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
     cond make -C $OBJECTS/gdb/gdbserver -j$j install
 
@@ -343,8 +338,8 @@ function doit() {
     banner "FINISHED SUCCESFULLY"
 }
 
-tail -f $SCREEN --pid=$$ | sed -e 's/^++* echo \(.*\)$/\1/'\
-                               -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
+tail -f $SCREEN --pid=$$ | sed -e 's/^++* eval echo \(.*\)$/\1/'\
+                               -e 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
 #tail -f $SCREEN --pid=$$&
 
 if $s; then swap doit >/dev/null 2>&1; else swap doit >$log 2>&1; fi

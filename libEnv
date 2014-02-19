@@ -9,7 +9,7 @@ isIn() { for index in $1; do if [ $index == "$2" ]; then return 0; fi; done; ret
 # Print the commands while they are executed.
 function setx() {
     set -x
-    $* 2>&1
+    eval "$@" 2>&1
     { set +x; } 2>/dev/null
 }
 
