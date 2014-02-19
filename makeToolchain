@@ -284,11 +284,10 @@ function doit() {
     cond cp -f $OBJECTS/glibc/csu/crtn.o $SYSROOTUSR/lib
     # ... so that we are again able to install gcc (and glibc).
     banner "GCC INSTALL"
-    cond cp $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h gcc/$LIMITSDIR/limits.h.sav
-    # Does the same as
-    # cat $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h >$OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h
-    # but without redirection, which can't be passed to a function, i.e. cond.
-    cond sed -ne "$OBJECTS/$GCC/wgcc/$LIMITSDIR/limits.h" $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h
+    if ! [ -e $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav ]; then
+        cond cp $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav
+    fi
+    cond "cat $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h >$OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h"
     cond make -C $OBJECTS/$GCC -j$j $GCCMAKE install
     banner "GLIBC INSTALL"
     if [ "$AUDIS_TOOLCHAIN" == "powerpc" ]; then
