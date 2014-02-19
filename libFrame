@@ -9,7 +9,7 @@ usageTemplate() {
     echo "         -j jobs Do this many jobs in parallel."
 }
 
-tail -f $SCREEN --pid $$ | sed -e 's/^++* \(.*\)$/\1/' 2>/dev/null&
+tail -f $SCREEN --pid $$ | sed -e 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
 
 doit() {
     if [ "$j" == "false" ]; then j=40; fi
