@@ -159,7 +159,7 @@ else
     SYSROOTUSR=$SYSROOT/$AUDIS_TARGET
     WITHSYSROOT=
 fi
-setx mkdir -p $OBJECTS
+mkdir -p $OBJECTS
 log=$OBJECTS/build.log
 PATH=$PREFIX/bin:$PATH
 if ! $c && ! $s; then
@@ -172,7 +172,7 @@ if [ -n "$ARCHIVES" ]; then
         if [ -d $SOURCES/`tar -tf $index | grep "^[^/]*/$"` ]; then
             setx echo $index has already been unpacked.;
         else
-            setx mkdir -p $SOURCES
+            mkdir -p $SOURCES
             tar -xf $index -C $SOURCES;
         fi
     done
@@ -191,15 +191,14 @@ if [ "$n" -le "$LASTDONE" ] 2>/dev/null; then
     # we need to handle the case when $n is 1 in a different way!
     if [ "$n" -eq "1" ]; then LASTDONE=0; else LASTDONE=`expr $n - 1`; fi
 fi
-echo $LASTDONE >$LASTDONEFILE
+if ! $s; then echo $LASTDONE >$LASTDONEFILE; fi
 DOCURRENT=0
-function cond() {
+cond() {
     ((DOCURRENT++))
     if $s; then
         if [ $DOCURRENT -gt $LASTDONE ]; then
             if [ "$N" == "false" ] || [ $DOCURRENT -le $N ]; then
                 setx echo Step $DOCURRENT:
-                echo $*
                 setx echo $*
             fi
         fi
@@ -226,28 +225,28 @@ function doit() {
     fi
     
     banner "CHEAT"
-    cond mkdir -p $OBJECTS/glibc $SYSROOTUSR
+    setx mkdir -p $OBJECTS/glibc $SYSROOTUSR
     cond tar -C $OBJECTS/glibc -xf $SOURCES/glibc/baseLibsAud/$CHEATFILE
     cond chmod -R 755 $OBJECTS/glibc/$CHEATDIR
     cond cp -rf $OBJECTS/glibc/$CHEATDIR/* $SYSROOTUSR
     cond cp -f $SOURCES/linux/include/linux/aud/* $SYSROOTUSR/include/linux/aud
 
     banner "BINUTILS"
-    cond mkdir -p $OBJECTS/binutils
+    setx mkdir -p $OBJECTS/binutils
     setx cd $OBJECTS/binutils
     cond $SOURCES/binutils/configure --target=$AUDIS_TARGET --prefix=$PREFIX $BINUTILSCONFIG $WITHSYSROOT
     cond make -C $OBJECTS/binutils -j$j
     cond make -C $OBJECTS/binutils -j$j install
 
     banner "GCC"
-    cond mkdir -p $OBJECTS/$GCC
+    setx mkdir -p $OBJECTS/$GCC
     setx cd $OBJECTS/$GCC
     cond $SOURCES/$GCC/configure --target=$AUDIS_TARGET --prefix=$PREFIX --enable-languages=c,c++ --disable-libgomp $GCCCONFIG $WITHSYSROOT
     cond make -C $OBJECTS/$GCC -j$j $GCCMAKE
     cond make -C $OBJECTS/$GCC -j$j $GCCMAKE install
 
     banner "LINUX HEADERS"
-    cond mkdir -p $OBJECTS/linux
+    setx mkdir -p $OBJECTS/linux
     cond make -C $SOURCES/linux O=$OBJECTS/linux ARCH=$LINUXARCH INSTALL_HDR_PATH=$SYSROOTUSR headers_install
 
     banner "GLIBC"
@@ -264,7 +263,7 @@ function doit() {
         # Looks like we still need to cheat for the AuDis 3 ARM
         # build, but we are quite clean for everything else :-).
         banner "CHEAT INSTALL"
-        cond mkdir -p $SYSROOTUSR
+        setx mkdir -p $SYSROOTUSR
         cond cp -rf $OBJECTS/glibc/$CHEATDIR/* $SYSROOTUSR
     fi
     banner "BINUTILS INSTALL"
@@ -281,7 +280,7 @@ function doit() {
     cond cp -f $SOURCES/glibc/include/gnu/stubs.h $SYSROOTUSR/include/gnu
     cond cp -f $OBJECTS/glibc/bits/stdio_lim.h $SYSROOTUSR/include/bits
     cond cp -f $SOURCES/linux/include/linux/compiler.h $SYSROOTUSR/include/linux
-    cond mkdir -p $SYSROOTUSR/lib
+    setx mkdir -p $SYSROOTUSR/lib
     cond cp -f $OBJECTS/glibc/csu/crti.o $SYSROOTUSR/lib
     cond cp -f $OBJECTS/glibc/libc.so $SYSROOTUSR/lib
     cond cp -f $OBJECTS/glibc/dlfcn/libdl.so $SYSROOTUSR/lib
@@ -323,14 +322,14 @@ function doit() {
     fi
 
     banner "GDB"
-    cond mkdir -p $OBJECTS/gdb
+    setx mkdir -p $OBJECTS/gdb
     setx cd $OBJECTS/gdb
     cond $SOURCES/gdb/configure --target=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
     cond make -C $OBJECTS/gdb -j$j
     cond make -C $OBJECTS/gdb -j$j install
 
     banner "GDBSERVER"
-    cond mkdir -p $OBJECTS/gdb/gdbserver
+    setx mkdir -p $OBJECTS/gdb/gdbserver
     setx cd $OBJECTS/gdb/gdbserver
     cond $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT
     cond make -C $OBJECTS/gdb/gdbserver -j$j CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
