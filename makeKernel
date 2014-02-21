@@ -7,8 +7,8 @@ audisBoard "$@"
 
 kernel() {
     swap banner "Configuring kernel" >>$log 2>&1
-    swap setx make -C $AUDIS_SOURCE_PATH/pkgs/linux O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH ${AUDIS_BOARD}_defconfig >>$log 2>&1
+    swap setx make -C $AUDIS_SOURCE_PATH/pkgs/linux O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH ${AUDIS_BOARD}_audis_defconfig >>$log 2>&1
     swap banner "Building kernel" >>$log 2>&1
-    swap setx make -j$jobs -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 $AUDIS_KERNEL >>$log 2>&1
+    swap setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 $AUDIS_KERNEL >>$log 2>&1
 }
 doit kernel

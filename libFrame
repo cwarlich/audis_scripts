@@ -23,8 +23,8 @@ doit() {
         fi
     fi
     if $c; then
-        setx rm -rf $destdir; exit 0;
-        if [ "$1" == "rootfs" ]; then rm -rf $rootfsDir $kernel; fi
+        setx rm -rf $destdir | sed -ne '' 2>&1; exit 0; 
+        if [ "$1" == "rootfs" ]; then setx rm -rf $rootfsDir $kernel | sed -ne '' 2>&1; fi
     fi
     echo Using toolchain ${AUDIS_TOOL_PREFIX}
     if [ -x ${AUDIS_TOOL_PREFIX}gdb ]; then
@@ -33,6 +33,8 @@ doit() {
         rm -f $log
         exec 4>&1
         trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
+        cd $destdir
+        echo Being in directory `pwd`
         $1
         swap banner "FINISHED SUCCESSFULLY" >>$log 2>&1
         # Dirty hack to wait for tail to print all its messages.

@@ -19,7 +19,7 @@ rootfs() {
     # Let's start with a clean state
     swap setx rm -rf $rootfsDir/* $kernel >>$log 2>&1
     # Creating the directories that need initial content.
-    swap setx mkdir $rootfsDir/etc $rootfsDir/sbin $rootfsDir/dev $rootfsDir/audislib >>$log 2>&1
+    swap setx mkdir $rootfsDir/etc $rootfsDir/sbin $rootfsDir/dev $rootfsDir/libAuD >>$log 2>&1
     # The inittab creates the rest as needed during system boot time.
     cat <<! >$rootfsDir/etc/inittab
     # This inittab bootstraps a fully operational busybox-based
@@ -109,13 +109,13 @@ rootfs() {
     # We copy the AuDis GLIBC.
     swap banner "COPYING AUDIS GLIBC AND LIBAUDIS" >>$log 2>&1
     # Anything from this point on is optional as it is not required to boot the system.
-    swap setx cp -a $AUDIS_GENERATED/nsr/toolchain/$AUDIS_TARGET/$AUDIS_TARGET/lib/*.so* $rootfsDir/audislib >>$log 2>&1
+    swap setx cp -a $AUDIS_GENERATED/nsr/toolchain/$AUDIS_TARGET/$AUDIS_TARGET/lib/*.so* $rootfsDir/libAuD >>$log 2>&1
     # System startup continues with this script.
     cat <<! >$rootfsDir/etc/rc.local
     #!/bin/sh
     # This is onlx needed due to a bug in our toolchain and will be fixed soon.
-    mkdir -p /lib
-    ln -s /audislib/ld-linux.so.2 /lib
+    # mkdir -p /lib
+    # ln -s /libAuD/ld-linux.so.2 /lib
     # We need a user database for any type of logins.
     if ! [ -e /etc/passwd ]; then
         touch /etc/passwd /etc/group /etc/shadow

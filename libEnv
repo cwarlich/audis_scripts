@@ -226,7 +226,7 @@ audisArch() {
             export AUDIS_ARCH=x86
             ;;
         *)
-            export AUDIS_ARCH=$1
+            export AUDIS_ARCH=$AUDIS_PARAMETER1
             ;;
     esac
 }
@@ -235,8 +235,8 @@ audisArch() {
 audisBoards() {
     audisArch "$@"
     if [ -d $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs ]; then
-        export AUDIS_BOARDS=$(find $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs -name "*_defconfig" -printf "%f "\
-                       | sed -e 's/_defconfig//g' | sed -e 's/ $//')
+        export AUDIS_BOARDS=$(find $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs -name "*_audis_defconfig" -printf "%f "\
+                       | sed -e 's/_audis_defconfig//g' | sed -e 's/ $//')
     else
         echo "Your kernel source tree seems to be messed up." 1>&2
         echo "Could not find the directory containing default configurations." 1>&2
@@ -251,6 +251,9 @@ audisKernel() {
     case $AUDIS_TOOLCHAIN in
         i686)
             export AUDIS_KERNEL=bzImage
+            ;;
+        mipsel | mipseb)
+            export AUDIS_KERNEL=vmlinux
             ;;
         *)
             export AUDIS_KERNEL=uImage

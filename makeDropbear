@@ -11,6 +11,6 @@ dropbear() {
     export CC=${AUDIS_TOOL_PREFIX}gcc
     swap setx $AUDIS_SOURCE_PATH/pkgs/dropbear/configure --host=$AUDIS_TARGET --build=i686-pc-linux --disable-zlib >>$log 2>&1
     swap banner "Building dropbear" >>$log 2>&1
-    swap setx make -j$jobs -C $destdir $AUDIS_PARAMETER2 >>$log 2>&1
+    swap setx make -j$j -C $destdir $AUDIS_PARAMETER2 >>$log 2>&1
 }
 doit dropbear

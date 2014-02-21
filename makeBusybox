@@ -9,6 +9,6 @@ busybox() {
     swap banner "Configuring busybox" >>$log 2>&1
     swap setx make -C $AUDIS_SOURCE_PATH/pkgs/busybox O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX AuDis_defconfig >>$log 2>&1
     swap banner "Building busybox" >>$log 2>&1
-    swap setx make -j$jobs -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER2 >>$log 2>&1
+    swap setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER2 >>$log 2>&1
 }
 doit busybox

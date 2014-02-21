@@ -1,0 +1,35 @@
+#!/bin/bash
+# Modify as needed:
+viewType="Dyn" # Dyn or Snap
+increment="" # empty or two-digit increment number
+if [ -n "$increment" ]; then
+    roleType=Ext
+    increment="-$increment"
+else
+    roleType=Tst # Tst or Dev
+fi
+branchType="Full"
+# Only change if you know what you are doing!
+source `dirname $0`/libEnv
+setView="cleartool setview $USER.Au$viewType$roleType$branchType-0"
+cleanAndBuild() {
+    setx "echo $1 -c $toolchain $board | $setView$version$increment"
+    if setx "echo $1 $toolchain $board | $setView$version$increment"; then
+        setx "echo $1 -j1 $toolchain $board V=1 | $setView$version$increment"
+    fi
+}
+
+#for version in 2 3; do
+for version in 3; do
+    for toolchain in `echo "makeToolchain -h" | $setView$version$increment 2>&1 | tail -n1`; do
+        banner "Doing AuDis $version build for $toolchain"
+        board=""
+        cleanAndBuild makeToolchain
+        cleanAndBuild makeBusybox
+        cleanAndBuild makeDropbear
+        for board in `echo "makeKernel $toolchain" | $setView$version$increment 2>&1 | tail -n1`; do
+            cleanAndBuild makeKernel
+            cleanAndBuild makeRootfs
+        done
+    done
+done

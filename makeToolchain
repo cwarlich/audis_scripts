@@ -140,7 +140,7 @@ else
 fi
 
 SOURCES=$AUDIS_SOURCE_PATH/pkgs
-TRUSTED=/audislib
+TRUSTED=/libAuD
 
 if $r; then
     ROOTDIR=$AUDIS_GENERATED/sr
@@ -221,6 +221,11 @@ function doit() {
     if $c; then
         setx $sim rm -rf $OBJECTS
         setx $sim rm -rf $PREFIX
+        if $m; then
+            setx $sim make -C $SOURCES/../ownsrc/aud_lib clean
+        else
+            setx $sim make -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET clean
+        fi
         exit 0;
     fi
     
@@ -286,17 +291,19 @@ function doit() {
     banner "GCC INSTALL"
     if ! [ -e $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav ]; then
         cond cp $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav
+    else
+        # We need this to have the same number of steps when reexecuting.
+        cond true The file limits.h has already be copied.
     fi
     cond "cat $OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h.sav $SOURCES/glibc/limitsAud.h >$OBJECTS/$GCC/gcc/$LIMITSDIR/limits.h"
     cond make -C $OBJECTS/$GCC -j$j $GCCMAKE install
     banner "GLIBC INSTALL"
-    if [ "$AUDIS_TOOLCHAIN" == "powerpc" ]; then
+    if [ "$AUDIS_TOOLCHAIN" == "powerpc" -o "$AUDIS_TOOLCHAIN" == "mipsel" -o "$AUDIS_TOOLCHAIN" == "mipseb" ]; then
         cond cp -f $OBJECTS/glibc/$CHEATDIR/include/sys/io.h $PREFIX/$AUDIS_TARGET/include/sys
     fi
     cond make -C $OBJECTS/glibc -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install
     cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib
     cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib/libthread_db.a
-    # FIXME: No output.
     if [ "$SR" == "nsr" ]; then
         # This is how we did it before, misleading and messing up arm ...
         #sed -i -e '/GROUP/ c\GROUP ( libc.so.6 libc_nonshared.a  AS_NEEDED ( ld-linux.so.2 ) )' $PREFIX/$AUDIS_TARGET/lib/libc.so
@@ -341,7 +348,7 @@ tail -f $SCREEN --pid=$$ | sed -e 's/^++* eval echo \(.*\)$/\1/'\
                                -e 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
 #tail -f $SCREEN --pid=$$&
 
-if $s; then swap doit >/dev/null 2>&1; else swap doit >$log 2>&1; fi
+if $s || $c; then swap doit >/dev/null 2>&1; else swap doit >$log 2>&1; fi
 
 # Dirty hack to wait for tail to print all its messages.
 sleep 1
