@@ -10,7 +10,9 @@ isIn() { for index in $1; do if [ $index == "$2" ]; then return 0; fi; done; ret
 function setx() {
     set -x
     eval "$@" 2>&1
+    status=$?
     { set +x; } 2>/dev/null
+    return $status
 }
 
 # Prints a "box" arround a string.
@@ -241,7 +243,7 @@ audisBoards() {
         echo "Your kernel source tree seems to be messed up." 1>&2
         echo "Could not find the directory containing default configurations." 1>&2
         echo "in $AUDIS_SOURCE_PATH/pkgs/linux/arch/$AUDIS_ARCH/configs" 1>&2
-        usageWrapper
+        exit 1
     fi
 }
 

@@ -14,22 +14,21 @@ source `dirname $0`/libEnv
 setView="cleartool setview $USER.Au$viewType$roleType$branchType-0"
 cleanAndBuild() {
     setx "echo $1 -c $toolchain $board | $setView$version$increment"
-    if setx "echo $1 $toolchain $board | $setView$version$increment"; then
+    if ! setx "echo $1 $toolchain $board | $setView$version$increment"; then
         setx "echo $1 -j1 $toolchain $board V=1 | $setView$version$increment"
     fi
 }
 
-#for version in 2 3; do
-for version in 3; do
+for version in 2 3; do
     for toolchain in `echo "makeToolchain -h" | $setView$version$increment 2>&1 | tail -n1`; do
         banner "Doing AuDis $version build for $toolchain"
         board=""
         cleanAndBuild makeToolchain
-        cleanAndBuild makeBusybox
-        cleanAndBuild makeDropbear
+        AUDIS_TOOL_PATH= cleanAndBuild makeBusybox
+        AUDIS_TOOL_PATH= cleanAndBuild makeDropbear
         for board in `echo "makeKernel $toolchain" | $setView$version$increment 2>&1 | tail -n1`; do
-            cleanAndBuild makeKernel
-            cleanAndBuild makeRootfs
+            AUDIS_TOOL_PATH= cleanAndBuild makeKernel
+            AUDIS_TOOL_PATH= cleanAndBuild makeRootfs
         done
     done
 done

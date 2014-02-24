@@ -44,5 +44,6 @@ doit() {
         echo "The required toolchain seems to be missing or incomplete;"
         echo "run \"makeToolchain $AUDIS_TOOLCHAIN\""
         echo "and / or fix or unset your AUDIS_TOOL_PATH first."
+        exit 1
     fi
 }

@@ -143,15 +143,15 @@ rootfs() {
     swap banner "INSTALLATION OF KERNEL AND MODULES" >>$log 2>&1
     # Now we take care of the board specific
     # part, i.e. the kernel and its modules.
-    swap setx cp -f $AUDIS_GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$AUDIS_KERNEL $kernel >>$log 2>&1
-    swap setx make -C $AUDIS_GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD INSTALL_MOD_PATH=$rootfsDir modules_install >>$log 2>&1
+    swap setx cp -f $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$AUDIS_KERNEL $kernel >>$log 2>&1
+    swap setx make -C $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX INSTALL_MOD_PATH=$rootfsDir modules_install >>$log 2>&1
     # Add additional module directories as desired.
     MODULEDIRS=test_driver
     for i in $MODULEDIRS; do
         swap setx mkdir -p $destdir/$i >>$log 2>&1
         swap setx cp -f $AUDIS_SOURCE_PATH/pkgs/linux/drivers/aud/$i/* $destdir/$i >>$log 2>&1
-        swap setx make -j$j -C $AUDIS_GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$destdir/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER3 >>$log 2>&1
-        swap setx make -C $AUDIS_GENERATED/kernel/$AUDIS_ARCH/$AUDIS_BOARD M=$destdir/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX INSTALL_MOD_PATH=$rootfsDir modules_install >>$log 2>&1
+        swap setx make -j$j -C $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD M=$destdir/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER3 >>$log 2>&1
+        swap setx make -C $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD M=$destdir/$i ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX INSTALL_MOD_PATH=$rootfsDir modules_install >>$log 2>&1
     done
     # We copy the gdb and dropbear server.
     swap banner "COPYING DROPBEAR AND GDB SERVER" >>$log 2>&1

@@ -10,5 +10,13 @@ kernel() {
     swap setx make -C $AUDIS_SOURCE_PATH/pkgs/linux O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH ${AUDIS_BOARD}_audis_defconfig >>$log 2>&1
     swap banner "Building kernel" >>$log 2>&1
     swap setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 $AUDIS_KERNEL >>$log 2>&1
+    swap setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 modules >>$log 2>&1
+    if [[ $AUDIS_PARAMETER1 =~ ^mipse[lb]$ ]]; then
+        tdir=$destdir/arch/$AUDIS_ARCH/boot
+        ${AUDIS_TOOL_PREFIX}objcopy -O binary $tdir/vmlinux $tdir/vmlinux.bin 
+        for i in `${AUDIS_TOOL_PREFIX}objdump -f $tdir/vmlinux | grep "start address" | cut -d " " -f 3-`; do
+            mkimage -A mips -O linux -T kernel -C none -a 0x80008000 -e $i -n uImage -d $tdir/vmlinux.bin $tdir/uImage
+        done
+    fi
 }
 doit kernel
