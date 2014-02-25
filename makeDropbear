@@ -6,11 +6,11 @@ usage() {
 audisToolPrefix "$@"
 
 dropbear() {
-    swap banner "Configuring dropbear" >>$log 2>&1
+    banner "Configuring dropbear"
     for i in strip ar ranlib install; do export `echo $i | tr '[a-z]' '[A-Z]'`=$AUDIS_TOOL_PREFIX$i; done
     export CC=${AUDIS_TOOL_PREFIX}gcc
-    swap setx $AUDIS_SOURCE_PATH/pkgs/dropbear/configure --host=$AUDIS_TARGET --build=i686-pc-linux --disable-zlib >>$log 2>&1
-    swap banner "Building dropbear" >>$log 2>&1
-    swap setx make -j$j -C $destdir $AUDIS_PARAMETER2 >>$log 2>&1
+    setx $AUDIS_SOURCE_PATH/pkgs/dropbear/configure --host=$AUDIS_TARGET --build=i686-pc-linux --disable-zlib
+    banner "Building dropbear"
+    setx make -j$j -C $destdir $AUDIS_PARAMETER2
 }
 doit dropbear

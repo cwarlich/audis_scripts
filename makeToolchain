@@ -219,6 +219,7 @@ function doit() {
     local sim;
     if $s; then sim=echo; fi
     if $c; then
+        banner "DELETING DERIVED FILES"
         setx $sim rm -rf $OBJECTS
         setx $sim rm -rf $PREFIX
         if $m; then
@@ -226,10 +227,11 @@ function doit() {
         else
             setx $sim make -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET clean
         fi
+        sleep 1;
         exit 0;
     fi
     
-    banner "CHEAT"
+    banner "CHEATED BUILD" 2
     cond mkdir -p $OBJECTS/glibc $SYSROOTUSR
     cond tar -C $OBJECTS/glibc -xf $SOURCES/glibc/baseLibsAud/$CHEATFILE
     cond chmod -R 755 $OBJECTS/glibc/$CHEATDIR
@@ -259,7 +261,7 @@ function doit() {
     cond cp -f $SOURCES/glibc/rt/rt/internal.h $SYSROOTUSR/include/rt
     cond make -C $OBJECTS/glibc -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED
 
-    banner "CLEAN INSTALL"
+    banner "CLEAN INSTALL" 2
     cond rm -rf $PREFIX
     if [ "$AUDIS_VERSION" == "3" -a "$AUDIS_TOOLCHAIN" == arm ]; then
         # Looks like we still need to cheat for the AuDis 3 ARM
@@ -312,6 +314,7 @@ function doit() {
         cond sed -i -e "/GROUP/s%$PREFIX/$AUDIS_TARGET/lib/%%g" $PREFIX/$AUDIS_TARGET/lib/libc.so $PREFIX/$AUDIS_TARGET/lib/libpthread.so
     fi
 
+    banner "ADDONS BUILD AND INSTALL" 2
     banner "AUDIS"
     cond cp -f $SOURCES/linux/include/linux/linkage.h $SYSROOTUSR/include/linux
     cond cp -f $SOURCES/linux/arch/$LINUXARCH/include/asm/linkage.h $SYSROOTUSR/include/asm
@@ -348,7 +351,8 @@ tail -f $SCREEN --pid=$$ | sed -e 's/^++* eval echo \(.*\)$/\1/'\
                                -e 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
 #tail -f $SCREEN --pid=$$&
 
-if $s || $c; then swap doit >/dev/null 2>&1; else swap doit >$log 2>&1; fi
+if $s || $c; then swap doit >/dev/null 2>&1; else swap doit 2>&1 | sed -e '/^++* eval/d' -e '/^++* echo/d' >$log; fi
+#if $s || $c; then swap doit >/dev/null 2>&1; else swap doit >$log 2>&1; fi
 
 # Dirty hack to wait for tail to print all its messages.
 sleep 1

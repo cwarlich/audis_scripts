@@ -10,18 +10,37 @@ isIn() { for index in $1; do if [ $index == "$2" ]; then return 0; fi; done; ret
 function setx() {
     set -x
     eval "$@" 2>&1
-    status=$?
+    { status=$?; } 2>/dev/null
     { set +x; } 2>/dev/null
     return $status
 }
 
 # Prints a "box" arround a string.
 banner() {
-    l=`expr ${#1} + 4`
-    b=`head -c $l </dev/zero | tr '\0' '@'`
-    echo "$b" 1>&2
-    echo "@ $1 @" 1>&2
-    echo "$b" 1>&2
+    local OIFS=$IFS;
+    local IFS=$'\n'
+    local nline=0;
+    local line;
+    local level;
+    for line in $1; do
+        if [ "$nline" -lt "${#line}" ]; then nline=${#line}; fi
+    done
+    if [ "$2" -eq "$2" ] 2>/dev/null; then level=$2; else level=1; fi
+    nline=`expr $nline + 4 + $level + $level - 2`
+    local b=`head -c $nline </dev/zero | tr '\0' '@'`
+    for count in `seq 1 $level`; do
+        echo "$b" 1>&2
+    done
+    for line in $1; do
+        local ns=`expr $nline - ${#line} - 4 - $level - $level + 2`
+        line=$line`head -c $ns </dev/zero | tr '\0' ' '`
+        pre=`head -c $level </dev/zero | tr '\0' '@'`
+        echo "$pre ${line} $pre" 1>&2
+    done
+    for count in `seq 1 $level`; do
+        echo "$b" 1>&2
+    done
+    IFS=$OIFS;
 }
 
 # We may do better with bash 4, see last post of
@@ -253,9 +272,6 @@ audisKernel() {
     case $AUDIS_TOOLCHAIN in
         i686)
             export AUDIS_KERNEL=bzImage
-            ;;
-        mipsel | mipseb)
-            export AUDIS_KERNEL=vmlinux
             ;;
         *)
             export AUDIS_KERNEL=uImage

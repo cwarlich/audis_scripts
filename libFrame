@@ -22,27 +22,30 @@ doit() {
             read -p"$m" AUDIS_PARAMETER3 1>&2
         fi
     fi
+    mkdir -p $destdir
+    log=$destdir/build.log
+    rm -f $log
     if $c; then
-        setx rm -rf $destdir | sed -ne '' 2>&1; exit 0; 
-        if [ "$1" == "rootfs" ]; then setx rm -rf $rootfsDir $kernel | sed -ne '' 2>&1; fi
+        banner "DELETING DERIVED FILES"
+        swap setx rm -rf $destdir >/dev/null 2>&1; 
+        if [ "$1" == "rootfs" ]; then swap setx rm -rf $rootfsDir $kernel >/dev/null 2>&1; fi
+        sleep 1;
+        exit 0;
     fi
     echo Using toolchain ${AUDIS_TOOL_PREFIX}
     if [ -x ${AUDIS_TOOL_PREFIX}gdb ]; then
-        mkdir -p $destdir
-        log=$destdir/build.log
-        rm -f $log
         exec 4>&1
         trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
         cd $destdir
         echo Being in directory `pwd`
-        $1
-        swap banner "FINISHED SUCCESSFULLY" >>$log 2>&1
+        swap $1 2>&1 | sed -e '/^++* eval/d' >>$log
+        banner "FINISHED SUCCESSFULLY" >>$log 2>&1
         # Dirty hack to wait for tail to print all its messages.
         sleep 1
         rm -f $SCREEN
     else
         echo "The required toolchain seems to be missing or incomplete;"
-        echo "run \"makeToolchain $AUDIS_TOOLCHAIN\""
+        echo "run \"makeToolchain -i $AUDIS_TOOLCHAIN\""
         echo "and / or fix or unset your AUDIS_TOOL_PATH first."
         exit 1
     fi
