@@ -306,7 +306,7 @@ function doit() {
     cond make -C $OBJECTS/glibc -j$j AUTOCONF=no user-defined-trusted-dirs=$TRUSTED install
     cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib
     cond cp -f $OBJECTS/glibc/nptl_db/libthread_db_pic.a $PREFIX/$AUDIS_TARGET/lib/libthread_db.a
-    if [ "$SR" == "nsr" ]; then
+    if ! $r; then
         # This is how we did it before, misleading and messing up arm ...
         #sed -i -e '/GROUP/ c\GROUP ( libc.so.6 libc_nonshared.a  AS_NEEDED ( ld-linux.so.2 ) )' $PREFIX/$AUDIS_TARGET/lib/libc.so
         #sed -i -e '/GROUP/ c\GROUP ( libpthread.so.0 libpthread_nonshared.a )' $PREFIX/$AUDIS_TARGET/lib/libpthread.so

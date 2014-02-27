@@ -39,7 +39,7 @@ doit() {
         cd $destdir
         echo Being in directory `pwd`
         swap $1 2>&1 | sed -e '/^++* eval/d' >>$log
-        banner "FINISHED SUCCESSFULLY" >>$log 2>&1
+        swap banner "FINISHED SUCCESSFULLY" >>$log
         # Dirty hack to wait for tail to print all its messages.
         sleep 1
         rm -f $SCREEN
