@@ -1,12 +1,17 @@
 #!/bin/bash
-source `dirname $0`/libEnv
-audisVersion
+source `dirname $0`/libFrame
+usage() {
+    usageTemplate "[build-parameter]"
+};
+audisOptions "$@"
 cleanAndBuild() {
-    banner "Doing ${1#make} for AuDis $AUDIS_VERSION and target $toolchain" 3
+    options=
+    if $c; then options="-c $options"; fi
+    if $o; then options="-o $options"; fi
+    if [ "$j" == "false" ]; then j=40; fi
     set -x
-    $1 -c $toolchain $board
-    if ! $1 $toolchain $board; then
-        $1 -j1 $toolchain $board V=1
+    if ! $1 $options -j$j $toolchain $board $AUDIS_PARAMETER1 && ! $c; then
+        $1 -j1 $toolchain $board V=1 $AUDIS_PARAMETER1
     fi
     { set +x; } 2>/dev/null
 }
