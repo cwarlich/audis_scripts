@@ -194,7 +194,7 @@ fi
 if ! $s; then echo $LASTDONE >$LASTDONEFILE; fi
 DOCURRENT=0
 cond() {
-    ((DOCURRENT++))
+    DOCURRENT=$((DOCURRENT + 1))
     if $s; then
         if [ $DOCURRENT -gt $LASTDONE ]; then
             if [ "$N" == "false" ] || [ $DOCURRENT -le $N ]; then
@@ -207,7 +207,7 @@ cond() {
             if [ "$N" == "false" ] || [ $DOCURRENT -le $N ]; then
                 setx echo Step $DOCURRENT:
                 setx "$@"
-                ((LASTDONE++))
+                LASTDONE=$((LASTDONE+1))
                 echo $LASTDONE >$LASTDONEFILE
             fi
         fi
@@ -220,15 +220,14 @@ function doit() {
     if $s; then sim=echo; fi
     if $c; then
         banner "DELETING DERIVED FILES"
-        setx $sim rm -rf $OBJECTS
-        setx $sim rm -rf $PREFIX
+        setx $sim rm -rf $OBJECTS 2>&1 | sed -e '/^++* eval/d' 1>&2
+        setx $sim rm -rf $PREFIX 2>&1 | sed -e '/^++* eval/d' 1>&2
         if $m; then
-            setx $sim make -C $SOURCES/../ownsrc/aud_lib clean
+            setx $sim make -C $SOURCES/../ownsrc/aud_lib clean 2>&1 | sed -e '/^++* eval/d' 1>&2
         else
-            setx $sim make -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET clean
+            setx $sim make -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET clean 2>&1 | sed -e '/^++* eval/d' 1>&2
         fi
-        sleep 1;
-        exit 0;
+        return 0;
     fi
     
     banner "CHEATED BUILD" 2
@@ -338,6 +337,13 @@ function doit() {
     cond "cd $OBJECTS/gdb/gdbserver && $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT"
     cond make -C $OBJECTS/gdb/gdbserver -j$j CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
     cond make -C $OBJECTS/gdb/gdbserver -j$j install
+
+    if [ "$AUDIS_TOOLCHAIN" != "i686" ]; then
+        banner "MKIMAGE"
+        cond mkdir -p $OBJECTS/u-boot
+        cond gcc -DUSE_HOSTCC -I$SOURCES/u-boot/include/ -o $OBJECTS/mkimage $SOURCES/u-boot/tools/mkimage.c $SOURCES/u-boot/lib_generic/crc32.c
+        cond cp $OBJECTS/mkimage $PREFIX/bin/$AUDIS_TARGET-mkimage
+    fi
 
     if $i; then
         banner "FINAL INSTALL"

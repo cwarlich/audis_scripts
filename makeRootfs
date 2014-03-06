@@ -98,6 +98,16 @@ rootfs() {
 # Continue with system startup.
 ::wait:sh -c "if [ -e /etc/rc.local ]; then sh /etc/rc.local; fi"
 !
+    # Some special handling for the embedded controller.
+    if [ "$AUDIS_TOOLCHAIN" == "i686" -a "$AUDIS_BOARD" == "embedded_ctrl_hr" ]; then
+        cat <<! >>$rootfsDir/etc/inittab
+
+# For any reason, this device is not detected by mdev -s,
+# so we have to create it manually.
+::sysinit:mknod /dev/ttyUSB0 c 188 0
+::respawn:getty -L ttyUSB0 115200 linux
+!
+    fi
     # We copy the busybox ...
     setx cp -a $AUDIS_GENERATED/busybox/$AUDIS_TOOLCHAIN/busybox $rootfsDir/sbin
     # ... and provide init ...
