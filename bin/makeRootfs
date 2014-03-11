@@ -1,5 +1,5 @@
 #!/bin/bash
-source `dirname $0`/libFrame
+source `dirname $0`/../lib/libFrame
 usage() {
     usageTemplate "[toolchain board [build-parameter]]"
 };
@@ -17,7 +17,7 @@ rootfs() {
     # the system will make everything to be owned by root.
     setx sudo chmod -R 777 $rootfsDir
     # Let's start with a clean state
-    setx rm -rf $rootfsDir/* $kernel
+    setx sudo rm -rf $rootfsDir/* $kernel
     # Creating the directories that need initial content.
     setx mkdir $rootfsDir/etc $rootfsDir/sbin $rootfsDir/dev $rootfsDir/libAuD
     # The inittab creates the rest as needed during system boot time.

@@ -1,0 +1,50 @@
+#!/bin/bash
+source `dirname $0`/../lib/libGen
+
+delay() {
+    if [ "$1" -eq "$1" ] 2>/dev/null; then
+        echo Sleeping $1 seconds.
+        sleep $1;
+    elif [ -n "$1" ]; then
+        exit 0
+    else
+        sleep 1;
+    fi
+}
+cmd() {
+    if [ "$1" == "netio" ]; then
+        `dirname $0`/../lib/netio.plx --ip=10.120.130.21 --port=50000 --output=$2 --value=$3
+    elif [ "$1" == "relais" ]; then
+        if [ "$3" == "on" ]; then d=s; else d=r; fi
+        ssh $USER@ad045352pc "`dirname $0`/../lib/relais -$d$2"
+    else
+        echo "Unsuported device, fix this script!" 1>&2
+        exit 1
+    fi
+}
+action() {
+    cmd $1 $2 off;
+    delay $3;
+    cmd $1 $2 on
+}
+switchports=(
+    "minimodul:       netio 1"
+    "embedded_ctrl_hr:netio 2"
+    "cp1243:          netio 4"
+    "tdcboard:        netio 3"
+    "microbox:        relais 1"
+    "cp1500:          relais 2"
+    "cp15431:         relais 3"
+    "cp1542-5a:       relais 3"
+    "scalancem:       relais 4"
+    "tatiana:         relais 5"
+    "sinumerik_d455-2:relais 8"
+)
+
+if isIn "$(getHashKeys switchports[@])" $1; then
+    action $(getHashKey switchports[@] "$1") $2
+else
+    echo `basename $0` is only configured for one of the following boards:
+    echo $(getHashKeys switchports[@])
+    exit 1
+fi

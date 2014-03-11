@@ -1,5 +1,5 @@
 #!/bin/bash
-source `dirname $0`/libFrame
+source `dirname $0`/../lib/libFrame
 usage() {
     usageTemplate "[toolchain [build-parameter]]"
 };

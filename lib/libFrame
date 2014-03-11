@@ -1,5 +1,5 @@
 #!/bin/echo This is a library which must not be called directly.
-source `dirname $0`/libEnv
+source `dirname $0`/../lib/libEnv
 
 AUDIS_OPTIONS="c o j:"
 usageTemplate() {
@@ -28,7 +28,6 @@ doit() {
     if $c; then
         banner "DELETING DERIVED FILES"
         swap setx rm -rf $destdir 2>&1 | sed -e '/^++* eval/d' 1>&2; 
-        if [ "$1" == "rootfs" ]; then swap setx rm -rf $rootfsDir $kernel 2>&1 | sed -e '/^++* eval/d' 1>&2; fi
         return 0;
     fi
     echo Using toolchain ${AUDIS_TOOL_PREFIX}

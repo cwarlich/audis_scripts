@@ -1,0 +1,27 @@
+#!/bin/bash
+source `dirname $0`/../lib/libGen
+
+action() {
+    echo "ssh -t $USER@$1.nbgm.siemens.de minicom ttyAP$2"
+}
+comports=(
+    "cp1500:          $(action ad045352pc 0)"
+    "microbox:        $(action ad045352pc 1)"
+    "minimodul:       $(action ad045352pc 2)"
+    "embedded_ctrl_hr:$(action ad045352pc 3)"
+    "tatiana:         $(action ad045352pc 4)"
+    "scalancem:       $(action ad045352pc 7)"
+    "cp15431:         $(action ad319910pc 2)"
+    "cp1542-5a:       $(action ad319910pc 3)"
+    "cp1243:          $(action ad319910pc 4)"
+    "sinumerik_d455-2:$(action ad319910pc 5)"
+    "tdcboard:        $(action ad319910pc 6)"
+)
+
+if isIn "$(getHashKeys comports[@])" $1; then
+    $(getHashKey comports[@] "$1")
+else
+    echo `basename $0` is only configured for one of the following boards:
+    echo $(getHashKeys comports[@])
+    exit 1
+fi

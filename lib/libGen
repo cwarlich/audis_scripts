@@ -1,0 +1,74 @@
+#!/bin/echo This is a library which must not be called directly.
+# These settings are almost always a good idea.
+set -e
+set -o pipefail
+
+# Check if the word $2 is in list $1.
+isIn() { for index in $1; do if [ $index == "$2" ]; then return 0; fi; done; return 1;}
+
+# Print the commands while they are executed.
+function setx() {
+    set -x
+    eval "$@" 2>&1
+    { status=$?; } 2>/dev/null
+    { set +x; } 2>/dev/null
+    return $status
+}
+
+# Prints a "box" arround a string.
+banner() {
+    local OIFS=$IFS;
+    local IFS=$'\n'
+    local nline=0;
+    local line;
+    local level;
+    for line in $1; do
+        if [ "$nline" -lt "${#line}" ]; then nline=${#line}; fi
+    done
+    if [ "$2" -eq "$2" ] 2>/dev/null; then level=$2; else level=1; fi
+    nline=`expr $nline + 4 + $level + $level - 2`
+    local b=`head -c $nline </dev/zero | tr '\0' '@'`
+    for count in `seq 1 $level`; do
+        echo "$b" 1>&2
+    done
+    for line in $1; do
+        local ns=`expr $nline - ${#line} - 4 - $level - $level + 2`
+        line=$line`head -c $ns </dev/zero | tr '\0' ' '`
+        pre=`head -c $level </dev/zero | tr '\0' '@'`
+        echo "$pre ${line} $pre" 1>&2
+    done
+    for count in `seq 1 $level`; do
+        echo "$b" 1>&2
+    done
+    IFS=$OIFS;
+}
+
+# Function to get value by key.
+getHashKey() {
+    declare -a hash=("${!1}")
+    local key
+    local lookup=$2
+    for key in "${hash[@]}" ; do
+        KEY=${key%%:*}
+        VALUE=${key#*:}
+        if [[ $KEY == $lookup ]]
+        then
+            echo $VALUE
+        fi
+    done
+}
+# Function to get a list of all keys.
+getHashKeys() {
+    declare -a hash=("${!1}")
+    local KEY
+    local VALUE
+    local key
+    local lookup=$2
+    for key in "${hash[@]}" ; do
+        KEY=${key%%:*}
+        VALUE=${key#*:}
+        keys+="${KEY} "
+    done
+    echo $keys
+}
+
