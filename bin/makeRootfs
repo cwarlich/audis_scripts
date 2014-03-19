@@ -66,6 +66,8 @@ rootfs() {
 # We need the /sys filesystem for mdev to work properly.
 ::sysinit:mkdir -p /sys
 ::sysinit:mount -t sysfs sys /sys
+# Load aall modules:
+::sysinit:modprobe ats_drv
 # Note that any modules should be loaded before that step to
 # ensure that their device nodes are created properly.
 ::sysinit:mdev -s
@@ -119,7 +121,11 @@ rootfs() {
     # We copy the AuDis GLIBC.
     banner "COPYING AUDIS GLIBC AND LIBAUDIS"
     # Anything from this point on is optional as it is not required to boot the system.
-    setx cp -a $AUDIS_GENERATED/nsr/toolchain/$AUDIS_TARGET/$AUDIS_TARGET/lib/*.so* $rootfsDir/libAuD
+    if [ -d "$AUDIS_TOOL_PATH/$AUDIS_TARGET/lib" ]; then
+        setx cp -a $AUDIS_TOOL_PATH/$AUDIS_TARGET/lib/*.so* $rootfsDir/libAuD
+    else
+        setx cp -a $AUDIS_GENERATED/nsr/toolchain/$AUDIS_TARGET/$AUDIS_TARGET/lib/*.so* $rootfsDir/libAuD
+    fi
     # System startup continues with this script.
     cat <<! >$rootfsDir/etc/rc.local
 #!/bin/sh
@@ -153,7 +159,11 @@ fi
     banner "INSTALLATION OF KERNEL AND MODULES"
     # Now we take care of the board specific
     # part, i.e. the kernel and its modules.
-    setx cp -f $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$AUDIS_KERNEL $kernel
+    if [ "$AUDIS_TOOLCHAIN" ==  "i686" ]; then IMAGE=bzImage; else IMAGE=uImage; fi
+    setx cp -f $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$IMAGE $kernel
+    if [ "$AUDIS_TOOLCHAIN" ==  "powerpc" ]; then
+        setx cp -f $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD/arch/$AUDIS_ARCH/boot/$AUDIS_BOARD.dtb $kernel.dtb
+    fi
     setx make -C $AUDIS_GENERATED/kernel/$AUDIS_TOOLCHAIN/$AUDIS_BOARD ARCH=$AUDIS_ARCH CROSS_COMPILE=$AUDIS_TOOL_PREFIX INSTALL_MOD_PATH=$rootfsDir modules_install
     # Add additional module directories as desired.
     MODULEDIRS=test_driver
@@ -165,12 +175,20 @@ fi
     done
     # We copy the gdb and dropbear server.
     banner "COPYING DROPBEAR AND GDB SERVER"
-    setx cp -a $AUDIS_GENERATED/nsr/toolchain/$AUDIS_TARGET/bin/$AUDIS_TARGET-gdbserver $rootfsDir/sbin/gdbserver
+    if [ -d "$AUDIS_TOOL_PATH/$AUDIS_TARGET/lib" ]; then
+        setx cp -a $AUDIS_TOOL_PATH/bin/$AUDIS_TARGET-gdbserver $rootfsDir/sbin/gdbserver
+    else
+        setx cp -a $AUDIS_GENERATED/nsr/toolchain/$AUDIS_TARGET/bin/$AUDIS_TARGET-gdbserver $rootfsDir/sbin/gdbserver
+    fi
     setx cp -a $AUDIS_GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbear $rootfsDir/sbin
     setx cp -a $AUDIS_GENERATED/dropbear/$AUDIS_TOOLCHAIN/dropbearkey $rootfsDir/sbin
     # Creation and copy of test suite.
     banner "CREATING AND INSTALLING TEST SUITE"
     setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET
     setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET install_rootfs
+    # Creation and copy of audis version tool.
+    banner "CREATING AND INSTALLING AUDIS VERSION TOOL"
+    setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_version -f Makefile Platforms=$AUDIS_TARGET
+    setx cp $AUDIS_GENERATED/audis_version/$AUDIS_TARGET/audis_version $rootfsDir/opt/audis
 }
 doit rootfs

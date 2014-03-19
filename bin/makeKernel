@@ -6,18 +6,25 @@ usage() {
 audisBoard "$@"
 
 kernel() {
+    if [ "$AUDIS_TOOLCHAIN" == "powerpc" ]; then
+        # This is necessary on powerpc so that the internal linux wrapper
+        # script (arch/powerpc/boot/wrapper) find mkimage.
+        export PATH=$PATH:`dirname $AUDIS_TOOL_PREFIX`/../$AUDIS_TARGET/bin
+    fi
     banner "CONFIGURING KERNEL"
     setx make -C $AUDIS_SOURCE_PATH/pkgs/linux O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH ${AUDIS_BOARD}_audis_defconfig
     banner "BUILDING KERNEL"
-    if [[ $AUDIS_PARAMETER1 =~ ^mipse[lb]$ ]]; then kernel=vmlinux; else kernel=$AUDIS_KERNEL; fi
-    setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 $kernel
+    setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 $AUDIS_KERNEL
+    if [ "$AUDIS_BOARD" == "scalance_w" ]; then
+        setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 uImage
+    fi
     setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX ARCH=$AUDIS_ARCH $AUDIS_PARAMETER3 modules
-    if [[ $AUDIS_PARAMETER1 =~ ^mipse[lb]$ ]]; then
+    if [[ $AUDIS_TOOLCHAIN =~ ^mipse[lb]$ ]]; then
         tdir=$destdir/arch/$AUDIS_ARCH/boot
         setx mkdir -p $tdir
-        setx ${AUDIS_TOOL_PREFIX}objcopy -O binary $destdir/$kernel $tdir/vmlinux.bin
-        for i in `${AUDIS_TOOL_PREFIX}objdump -f $destdir/$kernel | grep "start address" | cut -d " " -f 3-`; do
-            setx mkimage -A mips -O linux -T kernel -C none -a 0x80008000 -e $i -n uImage -d $tdir/vmlinux.bin $tdir/$AUDIS_KERNEL
+        setx ${AUDIS_TOOL_PREFIX}objcopy -O binary $destdir/$AUDIS_KERNEL $tdir/$AUDIS_KERNEL.bin
+        for i in `${AUDIS_TOOL_PREFIX}objdump -f $destdir/$AUDIS_KERNEL | grep "start address" | cut -d " " -f 3-`; do
+            setx ${AUDIS_TOOL_PREFIX}mkimage -A mips -O linux -T kernel -C none -a 0x80008000 -e $i -n uImage -d $tdir/$AUDIS_KERNEL.bin $tdir/uImage
         done
     fi
 }

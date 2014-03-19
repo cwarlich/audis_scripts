@@ -1,5 +1,5 @@
 #!/bin/echo This is a library which must not be called directly.
-source `dirname $0`/../lib/libEnv
+source `dirname ${BASH_SOURCE[0]}`/libEnv
 
 AUDIS_OPTIONS="c o j:"
 usageTemplate() {
@@ -9,7 +9,7 @@ usageTemplate() {
     echo "         -j jobs Do this many jobs in parallel."
 }
 
-tail -f $SCREEN --pid $$ | sed -e 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
+tail -f $SCREEN --pid $$ | sed -ue 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
 
 doit() {
     if [ "$j" == "false" ]; then j=40; fi
@@ -26,8 +26,8 @@ doit() {
     log=$destdir/build.log
     rm -f $log
     if $c; then
-        banner "DELETING DERIVED FILES"
-        swap setx rm -rf $destdir 2>&1 | sed -e '/^++* eval/d' 1>&2; 
+        banner "DELETING DERIVED FILES FOR AUDIS$AUDIS_VERSION, $AUDIS_TOOLCHAIN"
+        swap setx rm -rf $destdir 2>&1 | sed -ue '/^++* eval/d' 1>&2; 
         return 0;
     fi
     echo Using toolchain ${AUDIS_TOOL_PREFIX}
@@ -36,8 +36,8 @@ doit() {
         trap "status=$? && sleep 1 && echo A logfile has been written to $log >&4; exit $status" EXIT
         cd $destdir
         echo Being in directory `pwd`
-        swap $1 2>&1 | sed -e '/^++* eval/d' >>$log
-        swap banner "FINISHED SUCCESSFULLY" >>$log
+        swap $1 2>&1 | sed -ue '/^++* eval/d' >>$log
+        swap banner "AUDIS$AUDIS_VERSION, $AUDIS_TOOLCHAIN FINISHED SUCCESSFULLY" >>$log
         # Dirty hack to wait for tail to print all its messages.
         sleep 1
         rm -f $SCREEN

@@ -2,7 +2,7 @@
 source `dirname $0`/../lib/libGen
 
 action() {
-    echo "ssh -t $USER@$1.nbgm.siemens.de minicom ttyAP$2"
+    echo "ssh -t $USER@$1.nbgm.siemens.de sudo minicom ttyAP$2"
 }
 comports=(
     "cp1500:          $(action ad045352pc 0)"
@@ -14,7 +14,7 @@ comports=(
     "cp15431:         $(action ad319910pc 2)"
     "cp1542-5a:       $(action ad319910pc 3)"
     "cp1243:          $(action ad319910pc 4)"
-    "sinumerik_d455-2:$(action ad319910pc 5)"
+    "sinumerik_d455:  $(action ad319910pc 5)"
     "tdcboard:        $(action ad319910pc 6)"
 )
 

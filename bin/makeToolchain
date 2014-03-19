@@ -219,13 +219,13 @@ function doit() {
     local sim;
     if $s; then sim=echo; fi
     if $c; then
-        banner "DELETING DERIVED FILES"
-        setx $sim rm -rf $OBJECTS 2>&1 | sed -e '/^++* eval/d' 1>&2
-        setx $sim rm -rf $PREFIX 2>&1 | sed -e '/^++* eval/d' 1>&2
+        banner "DELETING DERIVED FILES FOR AUDIS$AUDIS_VERSION, $AUDIS_TOOLCHAIN"
+        setx $sim rm -rf $OBJECTS 2>&1 | sed -ue '/^++* eval/d' 1>&2
+        setx $sim rm -rf $PREFIX 2>&1 | sed -ue '/^++* eval/d' 1>&2
         if $m; then
-            setx $sim make -C $SOURCES/../ownsrc/aud_lib clean 2>&1 | sed -e '/^++* eval/d' 1>&2
+            setx $sim make -C $SOURCES/../ownsrc/aud_lib clean 2>&1 | sed -ue '/^++* eval/d' 1>&2
         else
-            setx $sim make -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET clean 2>&1 | sed -e '/^++* eval/d' 1>&2
+            setx $sim make -C $SOURCES/../ownsrc/aud_lib -f Makefile Platforms=$AUDIS_TARGET clean 2>&1 | sed -ue '/^++* eval/d' 1>&2
         fi
         return 0;
     fi
@@ -343,6 +343,7 @@ function doit() {
         cond mkdir -p $OBJECTS/u-boot
         cond gcc -DUSE_HOSTCC -I$SOURCES/u-boot/include/ -o $OBJECTS/mkimage $SOURCES/u-boot/tools/mkimage.c $SOURCES/u-boot/lib_generic/crc32.c
         cond cp $OBJECTS/mkimage $PREFIX/bin/$AUDIS_TARGET-mkimage
+        cond cp $OBJECTS/mkimage $PREFIX/$AUDIS_TARGET/bin
     fi
 
     if $i; then
@@ -350,14 +351,14 @@ function doit() {
         if [ -d $AUDIS_TOOL_PATH ]; then cond cp -Rf $PREFIX/* $AUDIS_TOOL_PATH; else cond false; fi
     fi
 
-    banner "FINISHED SUCCESFULLY"
+    banner "AUDIS$AUDIS_VERSION, $AUDIS_TOOLCHAIN FINISHED SUCCESFULLY"
 }
 
-tail -f $SCREEN --pid=$$ | sed -e 's/^++* eval echo \(.*\)$/\1/'\
-                               -e 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
+tail -f $SCREEN --pid=$$ | sed -ue 's/^++* eval echo \(.*\)$/\1/'\
+                               -ue 's/^++* eval \(.*\)$/\1/' 2>/dev/null&
 #tail -f $SCREEN --pid=$$&
 
-if $s || $c; then swap doit >/dev/null 2>&1; else swap doit 2>&1 | sed -e '/^++* eval/d' -e '/^++* echo/d' >$log; fi
+if $s || $c; then swap doit >/dev/null 2>&1; else swap doit 2>&1 | sed -ue '/^++* eval/d' -e '/^++* echo/d' >$log; fi
 #if $s || $c; then swap doit >/dev/null 2>&1; else swap doit >$log 2>&1; fi
 
 # Dirty hack to wait for tail to print all its messages.

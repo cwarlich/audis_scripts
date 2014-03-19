@@ -1,11 +1,13 @@
 #!/bin/bash
-source `dirname $0`/../lib/libGen
+source `dirname $0`/../lib/libEnv
+audisOptions "$@"
 
 delay() {
     if [ "$1" -eq "$1" ] 2>/dev/null; then
         echo Sleeping $1 seconds.
         sleep $1;
     elif [ -n "$1" ]; then
+        rm -f $adaudis/KM/var/$AUDIS_PARAMETER1
         exit 0
     else
         sleep 1;
@@ -23,6 +25,13 @@ cmd() {
     fi
 }
 action() {
+    if [ -e $adaudis/KM/var/$AUDIS_PARAMETER1 ] && [ "`cat $adaudis/KM/var/$AUDIS_PARAMETER1`" != "$USER" ]; then
+        echo "Board $AUDIS_PARAMETER1 is in use by `cat $adaudis/KM/var/$AUDIS_PARAMETER1`."
+        exit 1;
+    else
+        #echo $USER >$adaudis/KM/var/$AUDIS_PARAMETER1
+        true
+    fi
     cmd $1 $2 off;
     delay $3;
     cmd $1 $2 on
@@ -38,11 +47,11 @@ switchports=(
     "cp1542-5a:       relais 3"
     "scalancem:       relais 4"
     "tatiana:         relais 5"
-    "sinumerik_d455-2:relais 8"
+    "sinumerik_d455:  relais 8"
 )
 
-if isIn "$(getHashKeys switchports[@])" $1; then
-    action $(getHashKey switchports[@] "$1") $2
+if isIn "$(getHashKeys switchports[@])" $AUDIS_PARAMETER1; then
+    action $(getHashKey switchports[@] "$AUDIS_PARAMETER1") $AUDIS_PARAMETER2
 else
     echo `basename $0` is only configured for one of the following boards:
     echo $(getHashKeys switchports[@])

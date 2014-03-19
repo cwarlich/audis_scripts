@@ -94,42 +94,7 @@ if( $return_value eq "250 0" && $value eq "off")
 elsif( $return_value eq "250 0" && $value eq "on")
 {
    print "power on output $output\n";
-   if( $output eq "4")
-   {
-      for( my $counter = 0; $counter < 10; $counter++)
-      {
-
-         $ok = $telnet->print("port $output 1");
-         sleep(30);
-         $ok = $telnet->print("nooip");
-         sleep(30);
-         $ok = $telnet->print("nooip");
-         my $ip = '10.120.130.22';
-         my $p = Net::Ping->new( "icmp", 1, 64 );
-         $p->ping($ip);
-         sleep(3);
-         $p->ping($ip);
-         sleep(3);
-         $p->ping($ip);
-         sleep(3);
-         if ( $p->ping($ip) ) 
-         {   
-            print "$ip answered\n";
-            last;
-         } 
-         else 
-         {
-            print "$ip did not answer\n";
-            print "try again\n";
-            $ok = $telnet->print("port $output 0");
-            sleep(1);
-         }
-      }
-   }
-   else
-   {
-      $ok = $telnet->print("port $output 1");
-   }
+   $ok = $telnet->print("port $output 1");
 }
 elsif( $return_value eq "250 1" && $value eq "off")
 {

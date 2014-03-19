@@ -3,7 +3,7 @@ source `dirname $0`/../lib/libFrame
 usage() {
     usageTemplate "[build-parameter]"
 };
-audisOptions "$@"
+audisToolchains "$@"
 cleanAndBuild() {
     options=
     if $c; then options="-c $options"; fi

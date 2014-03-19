@@ -6,9 +6,15 @@ usage() {
 audisToolPrefix "$@"
 
 busybox() {
+    if [ -e "$destdir/Makefile" ]; then
+        banner "BUSYBOX CLEANUP"
+        # Busybox does not recompile even when its configuration changed!
+        setx make -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX clean
+    fi
     banner "CONFIGURING BUSYBOX"
     setx make -C $AUDIS_SOURCE_PATH/pkgs/busybox O=$destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX AuDis_defconfig
     banner "BUILDING BUSYBOX"
+    #if [ "$AUDIS_TOOLCHAIN" == "mipseb" ]; then ENDIANNESS=-EB; else ENDIANNESS=; fi
     setx make -j$j -C $destdir CROSS_COMPILE=$AUDIS_TOOL_PREFIX $AUDIS_PARAMETER2
 }
 doit busybox

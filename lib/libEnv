@@ -1,5 +1,5 @@
 #!/bin/echo This is a library which must not be called directly.
-source `dirname $0`/../lib/libGen
+source `dirname ${BASH_SOURCE[0]}`/libGen
 
 # We may do better with bash 4, see last post of
 # http://superuser.com/questions/184307/bash-create-anonymous-fifo
@@ -26,59 +26,6 @@ usageWrapper() {
     fi
 }
 
-# Set AUDIS_SOURCE_PATH.
-audisSourcePath() {
-    local second="Set\ view:\ ..\ NONE\ ..$"
-    if [[ `cleartool pwv` =~ $second ]]; then
-        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
-        local view="${BASH_REMATCH[1]}";
-        if [[ $view =~ NONE ]]; then
-            if ! [ -d "$AUDIS_SOURCE_PATH/pkgs" ]; then
-                echo "This script requires either a CleadCase AuDis view being set" 1>&2
-                echo "or an environment variable named \$AUDIS_VIEW_PATH to point" 1>&2
-                echo "to a directory containing the \"pkgs\" and (optionally) the" 1>&2
-                echo "\"ownsrc\" subdirectories." 1>&2
-                usageWrapper
-            fi
-        else
-            export AUDIS_SOURCE_PATH=`sed -ne "s%^[^ ]* \(.*$view\)%\1%p" ~/.ccase_svreg`/audis_dev/src
-        fi
-    else
-        export AUDIS_SOURCE_PATH=/audis_dev/src
-    fi
-}
-
-# Set AUDIS_VERSION.
-audisVersion() {
-    audisSourcePath # Just to ensure if we have set a view at all.
-    if [ -n "`cleartool pwv | sed -ne '/Au/p'`" ]; then
-        export AUDIS_VERSION=`cleartool catcs | sed -ne '0,/element \* AUDIS[A-Z_-0]*\([23]\).*/s//\1/p'`
-        if [ -z "$AUDIS_VERSION" ]; then
-            echo "The view must be a valid AuDis view, i.e. a view" 1>&2
-            echo "that has been created with the makeView script." 1>&2
-            usageWrapper
-        fi
-    else
-        export AUDIS_VERSION=`echo "$AUDIS_VIEW_PATH" | sed -ne "s%.*\([23]\)[^23]*%\1%p"`
-        if [ -z "$AUDIS_VERSION" ]; then
-            echo "The content of the \$AUDIS_SOURCE_PATH environment variable" 1>&2
-            echo "must indicate the AuDis version by containing either the" 1>&2
-            echo "digit 2 or 3." 1>&2
-            usageWrapper
-        fi
-    fi
-}
-
-# Set AUDIS_TOOLCHAINS.
-audisToolchains() {
-    audisVersion
-    if [ "$AUDIS_VERSION" == "2" ]; then
-        export AUDIS_TOOLCHAINS="arm i686 mipsel mipseb powerpc"
-    elif [ "$AUDIS_VERSION" == "3" ]; then 
-        export AUDIS_TOOLCHAINS="arm i686"
-    fi
-}
-
 # Sets AUDIS_PARAMETER1 ... AUDIS_PARAMETERn and the
 # number of parameters (AUDIS_NUMBER) and the variable
 # AUDIS_INTERACTIVE to either true or false.
@@ -98,8 +45,8 @@ audisToolchains() {
 #     I=${index%:}
 #     echo "$I=${!I}";
 # done
+AUDIS_OPTIONS=""
 audisOptions() {
-    audisToolchains
     for index in $AUDIS_OPTIONS; do
         eval "${index%:}=false";
     done
@@ -131,8 +78,62 @@ audisOptions() {
     else AUDIS_INTERACTIVE=false; fi
 }
 
-audisPrologue() {
+# Set AUDIS_SOURCE_PATH.
+audisSourcePath() {
+    local second="Set\ view:\ ..\ NONE\ ..$"
+    if [[ `cleartool pwv` =~ $second ]]; then
+        [[ `cleartool pwv` =~ ^Working\ directory\ view:\ (.*).$second ]];
+        local view="${BASH_REMATCH[1]}";
+        if [[ $view =~ NONE ]]; then
+            if ! [ -d "$AUDIS_SOURCE_PATH/pkgs" ]; then
+                echo "This script requires either a CleadCase AuDis view being set" 1>&2
+                echo "or an environment variable named \$AUDIS_VIEW_PATH to point" 1>&2
+                echo "to a directory containing the \"pkgs\" and (optionally) the" 1>&2
+                echo "\"ownsrc\" subdirectories." 1>&2
+                usageWrapper
+            fi
+        else
+            export AUDIS_SOURCE_PATH=`sed -ne "s%^[^ ]* \(.*$view\)%\1%p" ~/.ccase_svreg`/audis_dev/src
+        fi
+    else
+        export AUDIS_SOURCE_PATH=/audis_dev/src
+    fi
+}
+
+# Set AUDIS_VERSION.
+audisVersion() {
+    audisSourcePath "$@" # Just to ensure if we have set a view at all.
+    if [ -n "`cleartool pwv | sed -ne '/Au/p'`" ]; then
+        export AUDIS_VERSION=`cleartool catcs | sed -ne '0,/element \* AUDIS[A-Z_-0]*\([23]\).*/s//\1/p'`
+        if [ -z "$AUDIS_VERSION" ]; then
+            echo "The view must be a valid AuDis view, i.e. a view" 1>&2
+            echo "that has been created with the makeView script." 1>&2
+            usageWrapper
+        fi
+    else
+        export AUDIS_VERSION=`echo "$AUDIS_VIEW_PATH" | sed -ne "s%.*\([23]\)[^23]*%\1%p"`
+        if [ -z "$AUDIS_VERSION" ]; then
+            echo "The content of the \$AUDIS_SOURCE_PATH environment variable" 1>&2
+            echo "must indicate the AuDis version by containing either the" 1>&2
+            echo "digit 2 or 3." 1>&2
+            usageWrapper
+        fi
+    fi
+}
+
+# Set AUDIS_TOOLCHAINS.
+audisToolchains() {
+    audisVersion "$@"
+    if [ "$AUDIS_VERSION" == "2" ]; then
+        export AUDIS_TOOLCHAINS="arm i686 mipsel mipseb powerpc"
+    elif [ "$AUDIS_VERSION" == "3" ]; then 
+        export AUDIS_TOOLCHAINS="arm i686"
+    fi
     audisOptions "$@"
+}
+
+audisPrologue() {
+    audisToolchains "$@"
     if $AUDIS_INTERACTIVE; then
         echo This is the AuDis 2 / 3 `basename $0` script. It is only that verbose if 1>&2
         echo you call it without any command line parameters but works non-interactive if 1>&2
@@ -231,8 +232,14 @@ audisKernel() {
         i686)
             export AUDIS_KERNEL=bzImage
             ;;
-        *)
+        arm)
             export AUDIS_KERNEL=uImage
+            ;;
+        mipsel | mipseb)
+            export AUDIS_KERNEL=vmlinux
+            ;;
+        *)
+            export AUDIS_KERNEL=
             ;;
     esac
 }
