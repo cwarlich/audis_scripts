@@ -46,6 +46,8 @@ host=i386-linux;
 GCCCONFIG=""
 BINUTILSCONFIG=""
 GCCMAKE="CFLAGS_FOR_TARGET=-static"
+GDBSERVER_CONFIG="--without-expat"
+GDB_CONFIG="--without-expat"
 if [ "$AUDIS_VERSION" == "2" ]; then
     GCC=gcc-4.2
     LIMITSDIR=include
@@ -121,6 +123,8 @@ else
             GCCCONFIG="--with-arch=armv7-a --disable-libmudfla" # probably misspelled!
             BINUTILSCONFIG="--with-arch=armv7-a"
             GCCMAKE="AUTOCONF=no CFLAGS_FOR_TARGET=-static CFLAGS_FOR_TARGET+=-fPIC"
+            GDBSERVER_CONFIG="--with-arch=armv7-a"
+            GDB_CONFIG=""
             ;;
         i686)
             CHEATFILE=x686_v47_basetool.tar
@@ -328,13 +332,13 @@ function doit() {
 
     banner "GDB"
     cond mkdir -p $OBJECTS/gdb
-    cond "cd $OBJECTS/gdb && $SOURCES/gdb/configure --target=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT"
-    cond make -C $OBJECTS/gdb -j$j
+    cond "cd $OBJECTS/gdb && $SOURCES/gdb/configure --target=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux $GDB_CONFIG $WITHSYSROOT"
+    cond make -C $OBJECTS/gdb -j$j CFLAGS="-DAUDIS_GDB_EXTENSIONS"
     cond make -C $OBJECTS/gdb -j$j install
 
     banner "GDBSERVER"
     cond mkdir -p $OBJECTS/gdb/gdbserver
-    cond "cd $OBJECTS/gdb/gdbserver && $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux --without-expat $WITHSYSROOT"
+    cond "cd $OBJECTS/gdb/gdbserver && $SOURCES/gdb/gdb/gdbserver/configure --target=$AUDIS_TARGET --host=$AUDIS_TARGET --prefix=$PREFIX --build=i686-pc-linux $WITHSYSROOT $GDBSERVER_CONFIG"
     cond make -C $OBJECTS/gdb/gdbserver -j$j CFLAGS+=-DUSE_AUDIS_THREADNAME_SUPPORT GDBSERVER_LIBS+=-lthread_db GDBSERVER_LIBS+=-laudis GDBSERVER_LIBS+=-lrt GDBSERVER_LIBS+=-lpthread GDBSERVER_LIBS+=-ldl
     cond make -C $OBJECTS/gdb/gdbserver -j$j install
 

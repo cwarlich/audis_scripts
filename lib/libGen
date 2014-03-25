@@ -47,27 +47,18 @@ banner() {
 getHashKey() {
     declare -a hash=("${!1}")
     local key
-    local lookup=$2
     for key in "${hash[@]}" ; do
-        KEY=${key%%:*}
-        VALUE=${key#*:}
-        if [[ $KEY == $lookup ]]
-        then
-            echo $VALUE
+        if [[ ${key%%:*} == $2 ]]; then
+            echo ${key#*:}
         fi
     done
 }
 # Function to get a list of all keys.
 getHashKeys() {
     declare -a hash=("${!1}")
-    local KEY
-    local VALUE
     local key
-    local lookup=$2
     for key in "${hash[@]}" ; do
-        KEY=${key%%:*}
-        VALUE=${key#*:}
-        keys+="${KEY} "
+        keys+="${key%%:*} "
     done
     echo $keys
 }

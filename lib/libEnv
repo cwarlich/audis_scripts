@@ -121,9 +121,30 @@ audisVersion() {
     fi
 }
 
+# Set view type information.
+audisViewtype() {
+    audisVersion "$@"
+    [[ `cleartool pwv` =~ ([A-Za-z0-9_]*)\.Au([DS][^A-Z]*)([A-Z][^A-Z]*)([^-]*)-0([0-9]).?([0-9][0-9])?-?(.*)?$ ]]
+    export AUDIS_USER=${BASH_REMATCH[1]}
+    export AUDIS_TYPE=${BASH_REMATCH[2]}
+    export AUDIS_ROLE=${BASH_REMATCH[3]}
+    export AUDIS_BRANCH=${BASH_REMATCH[4]}
+    #AUDIS_VERSION=${BASH_REMATCH[5]}
+    if [ "$AUDIS_ROLE" == "Tst" ]; then
+        [[ `cleartool catcs` =~ AUDIS_PATCH[A-Z_]*-V0[23]\.([0-9][0-9]) ]]
+        export AUDIS_INCREMENT=${BASH_REMATCH[1]}
+        [[ `cleartool catcs` =~ -time\ ([^ ]*)?$ ]]
+        export AUDIS_TIME=${BASH_REMATCH[1]}
+    else
+        export AUDIS_INCREMENT=${BASH_REMATCH[6]}
+        export AUDIS_TIME=""
+    fi
+    export AUDIS_UBRANCH=${BASH_REMATCH[7]}
+}
+
 # Set AUDIS_TOOLCHAINS.
 audisToolchains() {
-    audisVersion "$@"
+    audisViewtype "$@"
     if [ "$AUDIS_VERSION" == "2" ]; then
         export AUDIS_TOOLCHAINS="arm i686 mipsel mipseb powerpc"
     elif [ "$AUDIS_VERSION" == "3" ]; then 

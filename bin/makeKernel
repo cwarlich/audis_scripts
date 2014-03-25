@@ -24,8 +24,12 @@ kernel() {
         setx mkdir -p $tdir
         setx ${AUDIS_TOOL_PREFIX}objcopy -O binary $destdir/$AUDIS_KERNEL $tdir/$AUDIS_KERNEL.bin
         for i in `${AUDIS_TOOL_PREFIX}objdump -f $destdir/$AUDIS_KERNEL | grep "start address" | cut -d " " -f 3-`; do
-            setx ${AUDIS_TOOL_PREFIX}mkimage -A mips -O linux -T kernel -C none -a 0x80008000 -e $i -n uImage -d $tdir/$AUDIS_KERNEL.bin $tdir/uImage
+            setx ${AUDIS_TOOL_PREFIX}mkimage -A mips -O linux -T kernel -C none -a 0x80008000 -e $i -n uImage -d $tdir/$AUDIS_KERNEL.bin $tdir/uImage.local
         done
+        # This is a workaround needed due to a strange ClearCase bug in connection with mkimage:
+        # When the direct output from mkimage is viewed from a remote Clearcase host, the first
+        # 0x440 bytes are seen as all being zero! A local copy works arround this behaviour. 
+        cp $tdir/uImage.local $tdir/uImage
     fi
 }
 doit kernel

@@ -13,14 +13,14 @@ cd /audis_dev
 cs="cleartool catcs"
 t='^element \* \.\.\.\/linux_pkg_patch_audis'
 f="sed -ne"
-version=`$cs | $f 's/^element \* AUDIS_PATCH-\(V0[23]\.[0-9][0-9]\).*/\1/p'`
+version=`$cs | $f 's/^element \* AUDIS_PATCH_[A-Z_]*-\(V0[23]\.[0-9][0-9]\).*/\1/p'`
 if [ -z "$version" ]; then
     echo "This script must be called from a valid Test View." >&2
     exit -1
 fi
 branch=`$cs | $f "s/${t}3\?_full\/LATEST.*/FULL/p"`
 if [ -z "$branch" ]; then
-    branch=`$cs | $f "s/${t}3\?_preempt\/LATEST.*/NRK_PREEMPT_RT/p"`
+    branch=`$cs | $f "s/${t}3\?_nrk_preempt\/LATEST.*/NRK_PREEMPT_RT/p"`
 fi
 if [ -z "$branch" ]; then
     if [ -z "`$cs | $f \"s/${t}.*/dummy/p\"`" ]; then

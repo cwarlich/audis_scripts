@@ -1,0 +1,65 @@
+#!/bin/bash
+source ~/git/audis_scripts/lib/libGen
+#   "board-name:        toolchain  version  board-ip       serial-host  port    reset-facility number  time-off   time-start"
+boards=(                            
+    "cp1500:            mipsel     1        10.120.130.50  ad045352pc   ttyAP0  relais         2"
+    "microbox:          i686       1        10.120.130.3   ad045352pc   ttyAP1  relais         1"
+    "minimodul:         arm        1        10.120.130.10  ad045352pc   ttyAP2  netio          1" 
+    "cp15431:           powerpc    2        10.120.130.22  ad319910pc   ttyAP2  relais         3       50"
+    "cp1542-5a:         mipsel     2        10.120.130.24  ad319910pc   ttyAP3  relais         3       50"
+    "cp1243:            arm        2        10.120.130.32  ad319910pc   ttyAP4  netio          4"
+    "sinumerik_d455:    i686       2        10.120.130.20  ad319910pc   ttyAP5  relais         8"
+    "tdcboard:          i686       2        10.120.130.35  ad319910pc   ttyAP6  netio          3"
+    "tdcrack:           i686       2        10.120.130.51  md10v6gc     ttyS0"
+    "embedded_ctrl_hr:  i686       3        10.120.130.13  ad045352pc   ttyAP3  netio          2"
+    "tatiana:           arm        3        10.120.130.49  ad045352pc   ttyAP4  relais         5"
+    "scalancem:         arm        3        10.120.130.42  ad045352pc   ttyAP7  relais         4"
+)
+archs=(
+    "mipsel: mips"
+    "mipseb: mips"
+    "powerpc:powerpc"
+    "i686:   x86"
+    "arm:    arm"
+)
+columns=(
+    "name:     0"
+    "toolchain:1"
+    "version:  2"
+    "ip:       3"
+    "host:     4"
+    "port:     5"
+    "facility: 6"
+    "number:   7"
+    "arch:     8"
+    "off:      9"
+    "start:   10" 
+)
+element() {
+    if isIn "$(getHashKeys boards[@])" $1; then
+        declare -a entry=($1 $(getHashKey boards[@] $1))
+        if isIn "$(getHashKeys columns[@])" $2; then
+            if [ "$2" == "arch" ]; then
+                echo "$(getHashKey archs[@] ${entry[$(getHashKey columns[@] toolchain)]})"
+            else
+                echo "${entry[$(getHashKey columns[@] $2)]}"
+            fi
+        else
+            echo "Only the following columns are defined for each board:"
+            echo "$(getHashKeys columns[@])"
+            exit 1
+        fi
+    else
+        echo "Only the following boards are defined:"
+        echo "$(getHashKeys boards[@])"
+        exit 1
+    fi
+}
+findBoards() {
+    local PARSED_OPTIONS=$(getopt -q -n "$0" --long "toolchain:,version:"  -- "$@")
+    echo $?
+    echo $PARSED_OPTIONS
+}
+
+element $1 $2
+#findBoards $@

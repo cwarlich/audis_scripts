@@ -186,9 +186,14 @@ fi
     banner "CREATING AND INSTALLING TEST SUITE"
     setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET
     setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET install_rootfs
+    setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET STATIC=true
+    setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_testsuite -f Makefile Platforms=$AUDIS_TARGET STATIC=true install_rootfs
     # Creation and copy of audis version tool.
     banner "CREATING AND INSTALLING AUDIS VERSION TOOL"
     setx make -C $AUDIS_SOURCE_PATH/ownsrc/aud_other/audis_version -f Makefile Platforms=$AUDIS_TARGET
     setx cp $AUDIS_GENERATED/audis_version/$AUDIS_TARGET/audis_version $rootfsDir/opt/audis
+    # Creation of tarball.
+    banner "CREATING ROOTFS TARBALL"
+    setx tar -C $rootfsDir/.. -czf $destdir/rootfs.tgz `basename $rootfsDir`
 }
 doit rootfs

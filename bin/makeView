@@ -4,16 +4,16 @@ set -o pipefail
 
 isIn() { for i in $1; do if [ $i == "$2" ]; then return 0; fi; done; return 1;}
 usage() {
-    echo "Usage: $0 -h:   Prints this help message."
-    echo "       $0 [-s]: Enters interactive mode, verbosly asking for all the"
+    echo "Usage: `basename $0` -h:   Prints this help message."
+    echo "       `basename $0` [-s]: Enters interactive mode, verbosly asking for all the"
     echo "                information that is required to create or modify a"
     echo "                view."
-    echo "       $0 [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Nrk_Preempt} {00-99}:"
+    echo "       `basename $0` [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Nrk_Preempt} {00-99}:"
     echo "                Creates a customer view for the given increment."
-    echo "       $0 [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Nrk_Preempt} {00-99} <time>:"
+    echo "       `basename $0` [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Nrk_Preempt} {00-99} <time>:"
     echo "                Creates or modifies a test view using the given time"
     echo "                stamp."
-    echo "       $0 [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Nrk_Preempt} [dev. branch] [00-99]:"
+    echo "       `basename $0` [-s] {2|3} {Full|Rt|Arch|Org|Nrk|Nrk_Preempt} [dev. branch] [00-99]:"
     echo "                Creates a development view, optionally working on a"
     echo "                development branch. While the view is based on .../LATEST"
     echo "                by default, development views may pass in an increment"
@@ -145,10 +145,11 @@ CSPEC=`mktemp` # ClearCase is too thick to read config specs from stdin!
 e=element
 u=`echo $B | tr '[:lower:]' '[:upper:]'`
 if [[ $p3 =~ ^[0-9]{2}$ ]] && [ -z "$p4" ]; then
+    if [ "$u" == "NRK_PREEMPT" ]; then u=${u}_RT; fi
     echo "$e * AUDIS_${u}-V0${V}.$p3" > $CSPEC;
 else
     if [[ $p3 =~ ^[0-9]{2}$ ]]; then f="/^$e \* CHECKEDOUT$/d;"
-    else f="/^$e \* AUDIS_PATCH-V0${V}\.$p3 -nocheckout$/d;"; fi
+    else f="/^$e \* AUDIS_PATCH_$u-V0${V}\.$p3 -nocheckout$/d;"; fi
     if [ $B != Full ]; then f="$f /^$e \* \.\.\.\/${v}full\/LATEST $a$/d;"; fi
     if [ $B == Nrk_Preempt ]; then f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $a$/d;";
     else f="$f /^$e \* \.\.\.\/${v}nrk_preempt\/LATEST $a$/d;"; fi 
@@ -168,7 +169,7 @@ else
     f="$f s/\(^$e \* \.\.\.\/\(.*\)\/LATEST\) -mkbranch \2$/\1/"
     sed -e "$f" <<! > $CSPEC;
 $e * CHECKEDOUT
-$e * AUDIS_PATCH-V0${V}.$p3 -nocheckout
+$e * AUDIS_PATCH_$u-V0${V}.$p3 -nocheckout
 $e /audis_dev/src/ownsrc/aud_other/audis_testsuite/... .../linux_pkg_patch_audis_rt/LATEST $a
 $e * .../$USER.AuDis-0${V}${dotP4}-$p3/LATEST $a
 $e * .../${v}full/LATEST $a
@@ -204,8 +205,8 @@ cd /audis_dev
 sim=""
 if [[ $p3 =~ ^[0-9]{2}$ ]]; then
     if [ -n "$p4" ]; then
-        if ! cleartool desc -s lbtype:AUDIS_PATCH-V0${V}.$p3 2>/dev/null; then
-            $sim cleartool mklbtype -nc AUDIS_PATCH-V0${V}.$p3
+        if ! cleartool desc -s lbtype:AUDIS_PATCH_$u-V0${V}.$p3 2>/dev/null; then
+            $sim cleartool mklbtype -nc AUDIS_PATCH_$u-V0${V}.$p3
         fi
     fi
 else
