@@ -1,0 +1,2 @@
+#!/bin/bash
+LD_LIBRARY_PATH=/usr/local/lib /usr/local/kvm/bin/qemu-system-x86_64 -net nic,model=rtl8139 -s -S -net user -m 128M -kernel /tftpboot/$USER/2/i686/tdcboard -append "root=/dev/nfs nfsroot=10.0.2.2:/storage/hd0b/target/$USER/2/i686/tdcboard rw ip=10.0.2.15::10.0.2.1:255.255.255.0 init=/sbin/init"
