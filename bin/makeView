@@ -150,14 +150,14 @@ if [[ $p3 =~ ^[0-9]{2}$ ]] && [ -z "$p4" ]; then
 else
     if [[ $p3 =~ ^[0-9]{2}$ ]]; then f="/^$e \* CHECKEDOUT$/d;"
     else f="/^$e \* AUDIS_PATCH_$u-V0${V}\.$p3 -nocheckout$/d;"; fi
-    if [ $B != Full ]; then f="$f /^$e \* \.\.\.\/${v}full\/LATEST $a$/d;"; fi
-    if [ $B == Nrk_Preempt ]; then f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $a$/d;";
-    else f="$f /^$e \* \.\.\.\/${v}nrk_preempt\/LATEST $a$/d;"; fi 
-    if [ $B == Arch ]; then f="$f /^$e \* \.\.\.\/${v}rt\/LATEST $a$/d;"; fi
-    if [ $B == Nrk ]; then f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $a$/d;"; fi
+    if [ $B != Full ]; then f="$f /^$e \* \.\.\.\/${v}full\/LATEST $b$/d;"; fi
+    if [ $B == Nrk_Preempt ]; then f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $b$/d;";
+    else f="$f /^$e \* \.\.\.\/${v}nrk_preempt\/LATEST $b$/d;"; fi 
+    if [ $B == Arch ]; then f="$f /^$e \* \.\.\.\/${v}rt\/LATEST $b$/d;"; fi
+    if [ $B == Nrk ]; then f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $b$/d;"; fi
     if [ $B == Org ]; then
-        f="$f /^$e \* \.\.\.\/${v}rt\/LATEST $a$/d;"
-        f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $a$/d;"
+        f="$f /^$e \* \.\.\.\/${v}rt\/LATEST $b$/d;"
+        f="$f /^$e \* \.\.\.\/${v}arch\/LATEST $b$/d;"
         f="$f /^$e \* \.\.\.\/dev_rules_upstream_erl\/LATEST $b$/d;";
     fi
     if [[ $p3 =~ ^[0-9]{2}$ ]] || [ -z "$p3" ]; then 
@@ -172,10 +172,10 @@ $e * CHECKEDOUT
 $e * AUDIS_PATCH_$u-V0${V}.$p3 -nocheckout
 $e /audis_dev/src/ownsrc/aud_other/audis_testsuite/... .../linux_pkg_patch_audis_rt/LATEST $a
 $e * .../$USER.AuDis-0${V}${dotP4}-$p3/LATEST $a
-$e * .../${v}full/LATEST $a
-$e * .../${v}nrk_preempt/LATEST $a
-$e * .../${v}rt/LATEST $a
-$e * .../${v}arch/LATEST $a
+$e * .../${v}full/LATEST $b
+$e * .../${v}nrk_preempt/LATEST $b
+$e * .../${v}rt/LATEST $b
+$e * .../${v}arch/LATEST $b
 $e * AUDIS$V $b
 $e * .../dev_rules_upstream_erl/LATEST $b
 $e * /main/LATEST $b

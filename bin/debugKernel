@@ -1,2 +1,18 @@
 #!/bin/bash
-LD_LIBRARY_PATH=/usr/local/lib /usr/local/kvm/bin/qemu-system-x86_64 -net nic,model=rtl8139 -s -S -net user -m 128M -kernel /tftpboot/$USER/2/i686/tdcboard -append "root=/dev/nfs nfsroot=10.0.2.2:/storage/hd0b/target/$USER/2/i686/tdcboard rw ip=10.0.2.15::10.0.2.1:255.255.255.0 init=/sbin/init"
+source `dirname $0`/../lib/libFrame
+libpath=/usr/local/kvm/lib
+usage() {
+    usageTemplate "[toolchain board [qemu-parameter]]"
+};
+audisBoard "$@"
+qemu() {
+    banner "STARTING QEMU"
+    setx LD_LIBRARY_PATH=$libpath /usr/local/kvm/bin/qemu-system-x86_64 -net nic,model=rtl8139 -s $AUDIS_PARAMETER3 -net user -m 128M -kernel /tftpboot/$USER/$AUDIS_VERSION/$AUDIS_TOOLCHAIN/$AUDIS_BOARD -append \"root=/dev/nfs nfsroot=10.0.2.2:/storage/hd0b/target/$USER/$AUDIS_VERSION/$AUDIS_TOOLCHAIN/$AUDIS_BOARD rw ip=10.0.2.15::10.0.2.1:255.255.255.0 init=/sbin/init\" -redir tcp:4321::4321
+}
+#doit qemu
+echo LD_LIBRARY_PATH=$libpath /usr/local/kvm/bin/qemu-system-x86_64 -net nic,model=rtl8139 -s $AUDIS_PARAMETER3 -net user -m 128M -kernel /tftpboot/$USER/$AUDIS_VERSION/$AUDIS_TOOLCHAIN/$AUDIS_BOARD -append \"root=/dev/nfs nfsroot=10.0.2.2:/storage/hd0b/target/$USER/$AUDIS_VERSION/$AUDIS_TOOLCHAIN/$AUDIS_BOARD rw ip=10.0.2.15::10.0.2.1:255.255.255.0 init=/sbin/init\" -redir tcp:4321::4321
+LD_LIBRARY_PATH=$libpath /usr/local/kvm/bin/qemu-system-x86_64 -net nic,model=rtl8139 -s $AUDIS_PARAMETER3 -net user -m 128M -kernel /tftpboot/$USER/$AUDIS_VERSION/$AUDIS_TOOLCHAIN/$AUDIS_BOARD -append "root=/dev/nfs nfsroot=10.0.2.2:/storage/hd0b/target/$USER/$AUDIS_VERSION/$AUDIS_TOOLCHAIN/$AUDIS_BOARD rw ip=10.0.2.15::10.0.2.1:255.255.255.0 init=/sbin/init" -redir tcp:4321::4321
+
+#echo ddd --debugger /audis_dev/src/generated/nsr/toolchain/i686-audis3-linux-gnueabi/bin/i686-audis3-linux-gnueabi-gdb  /audis_dev/src/generated/kernel/i686/tdcboard/vmlinux
+#ddd --debugger /audis_dev/src/generated/nsr/toolchain/i686-audis3-linux-gnueabi/bin/i686-audis3-linux-gnueabi-gdb  /audis_dev/src/generated/kernel/i686/tdcboard/vmlinux
+
